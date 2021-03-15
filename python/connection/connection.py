@@ -31,6 +31,7 @@ class SgtkP4Error(TankError):
     Specialisation of TankError raised after catching and processing a P4Exception
     """
 
+
 # global connection rlock to ensure that attempting to connect to Perforce happens exclusively.  This
 # stops the user from being presented with multiple password entry dialogs if the framework needs to
 # connect from multiple threads and they enter the correct password for the first thread.
@@ -66,6 +67,7 @@ class ConnectionHandler(object):
         """
         if self._p4 and self._p4.connected():
             self._p4.disconnect()
+            self._fw.log_debug("Disconnected from perforce server.")
         self._p4 = None
 
     def connect_to_server(self):
@@ -81,7 +83,7 @@ class ConnectionHandler(object):
 
         # set exception level so we only get exceptions for
         # errors, not warnings
-        p4.exception_level = 1
+        p4.exception_level = 2
 
         # load the server configuration:
         p4.port = str(server)
@@ -91,14 +93,20 @@ class ConnectionHandler(object):
         # attempt to connect to the server:
         try:
             self._fw.log_debug("Attempting to connect to %s" % server)
+            # connect to the p4 server
             p4.connect()
-        except P4Exception, e:
+            if p4.connected():
+                self._fw.log_debug("Connected!")
+        except Exception as e:
+            # Oh no, we failed to connect!
+            self._fw.log_debug("Failed to connect!")
             msg = None
             if p4.errors:
                 msg = p4.errors[0]
             else:
                 # TCP connect failure rather unhelpfully just raises an exception
-                # and doesn't add the error to p4.errors!
+                # and doesn't add the error to p4.errors! So lets parse the exception
+                # to get some useful information.
                 msg = str(e)
                 mo = re.match("\[P4\..*\(\)\] ", msg)
                 if mo:
@@ -325,7 +333,6 @@ class ConnectionHandler(object):
             if not user:
                 raise TankError("Perforce: Failed to find Perforce user for Shotgun user '%s'"
                                 % (sg_user if sg_user else "<unknown>"))
-        workspace = workspace if workspace is not None else self._get_current_workspace()
 
         # lock around attempting to connect so that only one thread will attempt
         # to connect at a time.
@@ -373,6 +380,7 @@ class ConnectionHandler(object):
                 raise TankError("Perforce: Failed to login user '%s' - %s" % (user, e))
 
             # finally, validate the workspace:
+            workspace = workspace if workspace is not None else self._sgtk_workspace()
             if workspace:
                 try:
                     self._validate_workspace(workspace, user)
@@ -615,6 +623,40 @@ class ConnectionHandler(object):
             return False
 
         return True
+
+    def _sgtk_workspace(self):
+        """
+        Fetches the Sgtk-created workspace for perforce or creates one if it doesnt
+        exist.
+
+        :returns: The name of the sgtk workspace.
+        """
+
+        p4 = self.connection
+        project_name = self._fw.sgtk.pipeline_configuration._project_name
+        root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
+        template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
+        workspace_name = "sgtk_{}_{}".format(project_name, p4.user)  # sgtk_proj_username
+        workspaces = [c["client"] for c in p4.run("clients")]
+
+        if workspace_name in workspaces:
+            self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
+            return workspace_name
+        else:
+            if not template_name in workspaces:
+                self._fw.log_error("Template workspace '{}' not found! Contact your admin.".format(template_name))
+                return None
+
+        self._fw.log_debug("Creating new workspace: {}".format(workspace_name))
+        # create a new client workspace spec from the project template
+        client = p4.fetch_client("-t", template_name, workspace_name)
+        # set the root to be one-level above the sgtk project root and give a desc
+        client._root = root_path
+        client._description = "Sgtk-generated workspace based on {}".format(template_name)
+        # save the client workspace to p4 so we can access it
+        p4.save_client(client)
+
+        return workspace_name
 
     def _get_current_workspace(self):
         """
