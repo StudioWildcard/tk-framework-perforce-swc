@@ -83,7 +83,7 @@ class ConnectionHandler(object):
 
         # set exception level so we only get exceptions for
         # errors, not warnings
-        p4.exception_level = 2
+        p4.exception_level = 1
 
         # load the server configuration:
         p4.port = str(server)
