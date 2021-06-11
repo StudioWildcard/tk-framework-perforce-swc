@@ -51,6 +51,7 @@ class ConnectionHandler(object):
         """
         self._fw = fw
         self._p4 = None
+        self.p4_server = self._get_p4_server()
 
     @property
     def connection(self):
@@ -75,7 +76,8 @@ class ConnectionHandler(object):
         Open a connection to the specified server.
         Returns a new P4 connection object if successful
         """
-        server = self._fw.get_setting("server")
+
+        server = self.p4_server
         host = self._fw.get_setting("host")
 
         # create new P4 instance
@@ -326,7 +328,7 @@ class ConnectionHandler(object):
         :returns:           A new connected P4 instance if successful or None if the user cancels.
         :raises:            TankError if connecting failed for some reason other than the user cancelling.
         """
-        server = self._fw.get_setting("server")
+        server = self.p4_server
         if not user:
             sg_user = sgtk.util.get_current_user(self._fw.sgtk)
             user = self._fw.execute_hook("hook_get_perforce_user", sg_user=sg_user)
@@ -435,7 +437,7 @@ class ConnectionHandler(object):
 
         :returns: A connected, logged-in p4 instance if successful.
         """
-        server = self._fw.get_setting("server")
+        server = self.p4_server
         sg_user = sgtk.util.get_current_user(self._fw.sgtk)
         user = self._fw.execute_hook("hook_get_perforce_user", sg_user=sg_user)
 
@@ -592,7 +594,7 @@ class ConnectionHandler(object):
             QtGui.QMessageBox.warning(widget, "Unknown Perforce User!", msg)
             return False
 
-        server = self._fw.get_setting("server")
+        server = self.p4_server
         try:
             # ensure we are connected:
             if not self._p4 or not self._p4.connected():
@@ -758,6 +760,17 @@ class ConnectionHandler(object):
 
         # user isn't logged in!
         return True
+
+    def _get_p4_server(self):
+        server_field = self._fw.get_setting("server_field")
+        sg_project = self._fw.shotgun.find_one('Project', [['id', 'is', self._fw.context.project['id']]], [server_field])
+        server = sg_project.get(server_field)
+
+        if not server:
+            self._fw.log_error("No server was configured for this project! Enter the p4 server in the project field '{}'".format(server_field))
+            return None
+
+        return str(sg_project.get(server_field))
 
 
 def connect(allow_ui=True, user=None, password=None, workspace=None):

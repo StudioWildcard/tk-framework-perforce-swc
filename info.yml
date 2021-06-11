@@ -1,10 +1,12 @@
 # expected fields in the configuration file for this engine
 configuration:
 
-    server:
+    server_field:
         type: str
-        description: "Perforce server to connect to.  Should be of the form: 'protocol:server:port'.
-                     e.g. 'tcp:perforce:1666'"
+        description: "The name of the project entity field that contains the perforce server to
+                      connect to. The value in the field should be of the form: 'protocol:server:port'."
+        allows_empty: True
+        default_value:  sg_p4_server
 
     server_aliases:
         type: list
