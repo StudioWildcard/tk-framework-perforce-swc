@@ -83,7 +83,7 @@ def submit_change(p4, change):
         change_spec = p4.fetch_change("-o", str(change))
         submit = p4.run_submit(change_spec)
         """
-        run_submit returns a list or dicts, something like this:
+        run_submit returns a list of dicts, something like this:
         [
          {'locked': '1', 'change': '35'},
          {'action': 'edit', 'rev': '6', 'depotFile': '//path/to/file.ext'},
