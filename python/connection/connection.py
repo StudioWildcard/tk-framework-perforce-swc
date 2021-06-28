@@ -638,7 +638,8 @@ class ConnectionHandler(object):
         project_name = self._fw.sgtk.pipeline_configuration._project_name
         root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
         template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
-        workspace_name = "sgtk_{}_{}".format(project_name, p4.user)  # sgtk_proj_username
+        hostname = socket.gethostname()
+        workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
         workspaces = [c["client"] for c in p4.run("clients")]
 
         if workspace_name in workspaces:
