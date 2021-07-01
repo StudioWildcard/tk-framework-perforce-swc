@@ -13,7 +13,15 @@ Common utilities for working with Perforce files
 """
 
 import re
-import urlparse
+
+import six
+from six.moves import urllib
+if not six.PY3:
+    # Python 2
+    import urlparse
+else:
+    # Python 3
+    from urllib import parse as urlparse
 
 import sgtk
 

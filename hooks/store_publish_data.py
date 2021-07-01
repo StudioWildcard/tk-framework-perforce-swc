@@ -87,7 +87,7 @@ class StorePublishData(sgtk.Hook):
             # changes to the file retain this information unless it's modified by a future
             # publish
             p4.run_attribute("-p", "-n", StorePublishData.PUBLISH_ATTRIB_NAME, "-v", sg_metadata_str, local_path)
-        except P4Exception, e:
+        except P4Exception as e:
             raise TankError("Failed to store publish data in Perforce attribute for file '%s'" % local_path)
 
         # clear the 'shotgun_review_metadata' attribute.  This handles the following
@@ -98,7 +98,7 @@ class StorePublishData(sgtk.Hook):
         # 3. Commit to Perforce
         try:
             p4.run_attribute("-n", StorePublishData.REVIEW_ATTRIB_NAME, local_path)
-        except P4Exception, e:
+        except P4Exception as e:
             raise TankError("Failed to clear review data in Perforce attribute for file '%s'" % local_path)
 
     def __upload_file_to_sg(self, file_path):
