@@ -41,7 +41,7 @@ def create_change(p4, description):
             except ValueError:
                 raise TankError("Perforce: Failed to extract new change id from '%s'" % p4_res)
 
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
     if new_change == None:
@@ -58,7 +58,7 @@ def add_to_change(p4, change, file_paths):
         # use reopen command which works with local file paths.
         # fetch/modify/save_change only works with depot paths!
         p4.run_reopen("-c", str(change), file_paths)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
@@ -68,7 +68,7 @@ def find_change_containing(p4, path):
     """
     try:
         p4_res = p4.run_fstat(path)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
     change = p4_res[0].get("change")
@@ -92,7 +92,7 @@ def submit_change(p4, change):
         """
         log.debug("Return of run_submit: {}".format(submit))
         return submit
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
@@ -106,7 +106,7 @@ def get_change_details(p4, changes):
     """
     try:
         p4_res = p4.run_describe(changes)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
     p4_res_lookup = {}

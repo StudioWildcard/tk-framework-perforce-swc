@@ -150,7 +150,7 @@ class ConnectionHandler(object):
             # Wouldn't it be nice if there was a simple query command instead of having to parse the
             # returned message!
             p4_res = self._p4.run_trust()
-        except P4Exception, e:
+        except P4Exception as e:
             # if for some reason the client has an ssl fingerprint but it doesn't match the servers then we get
             # an exception, something like this:
             #
@@ -225,7 +225,7 @@ class ConnectionHandler(object):
                 # boo!
                 raise TankError("Failed to establish trust with server!")
 
-        except P4Exception, e:
+        except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
 
         # all good!
@@ -286,7 +286,7 @@ class ConnectionHandler(object):
         all_workspaces = []
         try:
             all_workspaces = self._p4.run_clients("-u", user)
-        except P4Exception, e:
+        except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
 
         host = socket.gethostname()
@@ -344,7 +344,7 @@ class ConnectionHandler(object):
             # first, attempt to connect to the server:
             try:
                 self.connect_to_server()
-            except SgtkP4Error, e:
+            except SgtkP4Error as e:
                 raise TankError("Perforce: Failed to connect to perforce server '%s' - %s" % (server, e))
 
             # then ensure that the connection is trusted:
@@ -357,7 +357,7 @@ class ConnectionHandler(object):
                 elif not is_trusted:
                     # user decided not to trust!:
                     return None
-            except SgtkP4Error, e:
+            except SgtkP4Error as e:
                 raise TankError("Perforce: Connection to server '%s' is not trusted: %s" % (server, e))
 
             # log-in user:
@@ -378,7 +378,7 @@ class ConnectionHandler(object):
                     elif not logged_in:
                         # user cancelled log-in!
                         return None
-            except SgtkP4Error, e:
+            except SgtkP4Error as e:
                 raise TankError("Perforce: Failed to login user '%s' - %s" % (user, e))
 
             # finally, validate the workspace:
@@ -387,7 +387,7 @@ class ConnectionHandler(object):
                 try:
                     self._validate_workspace(workspace, user)
                     self._p4.client = str(workspace)
-                except SgtkP4Error, e:
+                except SgtkP4Error as e:
                     raise TankError("Perforce: Workspace '%s' is not valid! - %s" % (workspace, e))
 
             try:
@@ -398,7 +398,7 @@ class ConnectionHandler(object):
 
             return self._p4
 
-        except TankError, e:
+        except TankError as e:
             # failed to connect to server - switch to UI mode
             # if available instead:
             if allow_ui and self._fw.engine.execute_in_main_thread(self.__has_ui):
@@ -490,7 +490,7 @@ class ConnectionHandler(object):
             try:
                 self._fw.log_debug("Attempting to log-in user %s to server %s" % (self._p4.user, self._p4.port))
                 self._p4.run_login()
-            except P4Exception, e:
+            except P4Exception as e:
                 # keep track of error message:
                 error_msg = self._p4.errors[0] if self._p4.errors else str(e)
                 self._fw.log_debug(error_msg)
@@ -571,7 +571,7 @@ class ConnectionHandler(object):
         try:
             self._validate_workspace(widget.workspace, widget.user)
             self._p4.client = str(widget.workspace)
-        except TankError, e:
+        except TankError as e:
             # likely that the user isn't valid!
             QtGui.QMessageBox.information(widget, "Invalid Perforce Workspace!",
                                           ("Workspace '%s' is not valid for user '%s' on the Perforce server"
@@ -599,7 +599,7 @@ class ConnectionHandler(object):
             # ensure we are connected:
             if not self._p4 or not self._p4.connected():
                 self.connect_to_server()
-        except TankError, e:
+        except TankError as e:
             QtGui.QMessageBox.information(widget, "Perforce Connection Failed",
                                           "Failed to connect to Perforce server:\n\n    '%s'\n\n%s" % (server, e))
             return False
@@ -609,7 +609,7 @@ class ConnectionHandler(object):
             is_trusted, _ = self._ensure_connection_is_trusted(True, widget)
             if not is_trusted:
                 return False
-        except TankError, e:
+        except TankError as e:
             QtGui.QMessageBox.information(widget, "Perforce Connection Not Trusted",
                                           "The connection to the Perforce server:\n\n    '%s'\n\is not trusted: %s" % (server, e))
             return False
@@ -617,7 +617,7 @@ class ConnectionHandler(object):
         try:
             # make sure the current user is logged in:
             self._login_user(widget.user, widget)
-        except TankError, e:
+        except TankError as e:
             # likely that the user isn't valid!
             QtGui.QMessageBox.information(widget, "Perforce Log-in Failed",
                                           ("Failed to log-in user '%s' to the Perforce server:\n\n    '%s'\n\n%s"
@@ -704,7 +704,7 @@ class ConnectionHandler(object):
         """
         try:
             workspaces = self._p4.run_clients("-e", str(workspace))
-        except P4Exception, e:
+        except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
 
         if not workspaces:
@@ -724,7 +724,7 @@ class ConnectionHandler(object):
             # This will raise a P4Exception if the user isn't valid:
             # (TODO) - check this wasn't just a warning!
             users = self._p4.run_users(self._p4.user)
-        except P4Exception, e:
+        except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
 
         if not users:

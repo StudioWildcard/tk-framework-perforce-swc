@@ -14,8 +14,16 @@ Common utilities for working with Perforce files
 
 import os
 import re
-import urllib
-import urlparse
+
+import six
+from six.moves import urllib
+if not six.PY3:
+    # Python 2
+    import urlparse
+else:
+    # Python 3
+    from urllib import parse as urlparse
+    basestring = six.string_types
 
 from P4 import P4Exception, Map as P4Map  # Prefix P4 for consistency
 
@@ -142,7 +150,7 @@ def sync_published_file(p4, published_file_entity, latest=True):  # , dependenci
     # sync file:
     try:
         p4.run_sync(sync_args, sync_path)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: Failed to sync file %s - %s" % (sync_path, p4.errors[0] if p4.errors else e))
 
     # (TODO) handle dependencies
@@ -173,7 +181,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
     try:
         # as long as exception_level = 1, this will return [] if the file is not in the depo
         file_stat = p4.run_fstat(path)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Failed to run p4 fstat on file - %s" % (p4.errors[0] if p4.errors else e))
 
     # to edit the file in p4 we may need to do either an add or an edit depending on the
@@ -231,7 +239,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
                 # run the sync:
                 try:
                     p4.run_sync(sync_args)
-                except P4Exception, e:
+                except P4Exception as e:
                     raise TankError("Failed to sync file '%s' to latest revision - %s"
                                     % (path, p4.errors[0] if p4.errors else e))
 
@@ -249,7 +257,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
             # ensure file exists under the client root:
             try:
                 p4.run_where(path)
-            except P4Exception, e:
+            except P4Exception as e:
                 raise TankError("Unable to add file '%s' to depot - %s"
                                 % (path, p4.errors[0] if p4.errors else e))
         else:
@@ -259,7 +267,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
             # add file to depot:
             try:
                 p4.run_add(path)
-            except P4Exception, e:
+            except P4Exception as e:
                 raise TankError("Failed to add file '%s' to depot - %s"
                                 % (path, p4.errors[0] if p4.errors else e))
 
@@ -267,7 +275,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
         # File is already in Perforce so check it out to edit:
         try:
             p4.run_edit(path)
-        except P4Exception, e:
+        except P4Exception as e:
             raise TankError("Failed to checkout file '%s' - %s"
                             % (path, p4.errors[0] if p4.errors else e))
 
@@ -283,7 +291,7 @@ def __get_client_root(p4):
     try:
         client_spec = p4.fetch_client(p4.client)
         return client_spec._root.rstrip("\\/") + os.path.sep
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: Failed to query the workspace root for user '%s', workspace '%s': %s"
                         % (p4.user, p4.client, p4.errors[0] if p4.errors else e))
 
@@ -299,7 +307,7 @@ def __get_client_view(p4):
     try:
         client_spec = p4.fetch_client(p4.client)
         return P4Map(client_spec._view)
-    except P4Exception, e:
+    except P4Exception as e:
         raise TankError("Perforce: Failed to query the workspace view/mapping for user '%s', workspace '%s': %s"
                         % (p4.user, p4.client, p4.errors[0] if p4.errors else e))
 
@@ -357,7 +365,7 @@ def __run_fstat_and_aggregate(p4, file_paths, fields, flags, type, ignore_delete
     p4_res = []
     try:
         p4_res = p4.run_fstat(flags, file_paths)
-    except P4Exception, e:
+    except P4Exception as e:
         # under normal circumstances, this shouldn't happen so just raise a TankError.
         raise TankError("Perforce: Failed to run fstat on file(s) - %s" % (p4.errors[0] if p4.errors else e))
 

@@ -101,7 +101,7 @@ class StoreReviewData(sgtk.Hook):
         # update attribute for publish path:
         try:
             p4.run_attribute("-n", StoreReviewData.REVIEW_ATTRIB_NAME, "-v", sg_metadata_str, local_path)
-        except P4Exception, e:
+        except P4Exception as e:
             raise TankError("Failed to store review data in Perforce attribute for file '%s'" % local_path)
 
     def __upload_file_to_sg(self, file_path):
