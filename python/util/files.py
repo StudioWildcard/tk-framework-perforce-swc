@@ -15,7 +15,11 @@ Common utilities for working with Perforce files
 import os
 import re
 
-import six
+from P4 import P4Exception, Map as P4Map  # Prefix P4 for consistency
+
+import sgtk
+from sgtk import TankError
+from tank_vendor import six
 from six.moves import urllib
 if not six.PY3:
     # Python 2
@@ -24,11 +28,6 @@ else:
     # Python 3
     from urllib import parse as urlparse
     basestring = six.string_types
-
-from P4 import P4Exception, Map as P4Map  # Prefix P4 for consistency
-
-import sgtk
-from sgtk import TankError
 
 from .url import depot_path_from_url
 
@@ -413,7 +412,7 @@ def __run_fstat_and_aggregate(p4, file_paths, fields, flags, type, ignore_delete
             if file_rev is not None:
                 file_details = p4_results.get(file_rev, {})
             elif len(p4_results) == 1:
-                file_details = p4_results.values()[0]
+                file_details = list(p4_results.values())[0]
 
         p4_file_details[file_path] = file_details
 

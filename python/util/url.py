@@ -14,7 +14,8 @@ Common utilities for working with Perforce files
 
 import re
 
-import six
+import sgtk
+from tank_vendor import six
 from six.moves import urllib
 if not six.PY3:
     # Python 2
@@ -22,8 +23,6 @@ if not six.PY3:
 else:
     # Python 3
     from urllib import parse as urlparse
-
-import sgtk
 
 URL_REVISION_PARAM_REGEX = re.compile("^rev=(?P<revision>[0-9]+)$")
 
