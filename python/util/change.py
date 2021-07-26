@@ -84,11 +84,15 @@ def submit_change(p4, change):
         submit = p4.run_submit(change_spec)
         """
         run_submit returns a list of dicts, something like this:
-        [
-         {'locked': '1', 'change': '35'},
-         {'action': 'edit', 'rev': '6', 'depotFile': '//path/to/file.ext'},
-         {'submittedChange': '35'}
-        ]
+        [{'change': '90', 'locked': '2'},
+         "Possible string in here",
+         {'action': 'edit',
+          'depotFile': '//deva/Tool/ScorchedEarth/ToolCategory/ToolTestAsset/deva_ScorchedEarth_ToolTestAsset_concept.psd',
+          'rev': '2'},
+         {'action': 'edit',
+          'depotFile': '//deva/Tool/ScorchedEarth/ToolCategory/ToolTestAsset/deva_ScorchedEarth_ToolTestAsset_concept_alt.psd',
+          'rev': '4'},
+         {'submittedChange': '90'}]
         """
         log.debug("Return of run_submit: {}".format(submit))
         return submit
