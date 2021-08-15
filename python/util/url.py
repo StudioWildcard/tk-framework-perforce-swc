@@ -16,7 +16,8 @@ import re
 
 import sgtk
 from tank_vendor import six
-from six.moves import urllib
+from tank_vendor.six.moves import urllib
+
 if not six.PY3:
     # Python 2
     import urlparse
