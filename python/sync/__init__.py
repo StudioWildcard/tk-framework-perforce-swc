@@ -8,10 +8,4 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from sgtk.platform.qt import QtGui
-if hasattr(QtGui, "QWidget"):
-    from .open_connection_form import OpenConnectionForm
-    from .open_sync_form import SyncForm
-    from .password_form import PasswordForm
-    from .select_workspace_form import SelectWorkspaceForm
-    from .trust_form import TrustForm
+from .sync import  sync_with_dialog # connect,

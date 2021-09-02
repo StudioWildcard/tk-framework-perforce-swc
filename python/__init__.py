@@ -11,3 +11,4 @@
 from . import connection
 from . import util
 from . import widgets
+from . import sync

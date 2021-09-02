@@ -37,6 +37,7 @@ class PerforceFramework(sgtk.platform.Framework):
         self.connection = self.import_module("connection")
         self.util = self.import_module("util")
         self.widgets = self.import_module("widgets")
+        self.sync = self.import_module("sync")
 
         self.__p4_to_sg_user_map = {}
         self.__sg_to_p4_user_map = {}
