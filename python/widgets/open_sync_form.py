@@ -190,6 +190,10 @@ class SyncForm(QtGui.QWidget):
                         status = "Not In Depot"
                         status_icon = "error"
                         detail = "Nothing in depot resolves [{}]".format(item.get('root_path'))
+                    elif len(sync_response) is 1 and type(sync_response[0]) is str:
+                        status = "Nothing to Sync"
+                        status_icon = "validate"
+                        detail = "Nothing to sync for [{}]".format(item.get('root_path'))
                     else:
                         # if the response from p4 has items... make UI elements for them
                         status = "{} items to Sync".format(len(sync_response))
@@ -213,7 +217,7 @@ class SyncForm(QtGui.QWidget):
                                 self.sync_items[p4_item.get("clientFile")] = sync_item
                                 self.sync_order.append(p4_item.get("clientFile"))
                             else:
-                                self.fw.log_debug("P4 Response is str:: " + str(p4_item))
+                                self.fw.log_debug("P4 Response is string... : " + str(p4_item))
 
                 # store data against the object for when we use sync command   
                 tree_item.asset_name = asset_name
