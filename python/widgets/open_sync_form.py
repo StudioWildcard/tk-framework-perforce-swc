@@ -196,21 +196,24 @@ class SyncForm(QtGui.QWidget):
                         status_icon = "load"
 
                         for p4_item in sync_response:
-                            sync_item = QtGui.QTreeWidgetItem(tree_item)
-                            sync_item.setText(1, "Ready")
-                            sync_item.setText(2, p4_item.get("clientFile"))
-                            sync_item_icon = QtGui.QIcon(os.path.join(basepath, 
-                                                                    'resources', 
-                                                                    "status_load.png"))
-                            sync_item.setIcon(1, sync_item_icon)
-                            sync_item.setText(0, p4_item.get("clientFile").split(os.sep)[-1])
+                            if type(p4_item)==dict:
+                                sync_item = QtGui.QTreeWidgetItem(tree_item)
+                                sync_item.setText(1, "Ready")
+                                sync_item.setText(2, p4_item.get("clientFile"))
+                                sync_item_icon = QtGui.QIcon(os.path.join(basepath, 
+                                                                        'resources', 
+                                                                        "status_load.png"))
+                                sync_item.setIcon(1, sync_item_icon)
+                                sync_item.setText(0, p4_item.get("clientFile").split(os.sep)[-1])
 
-                            sync_item.asset_parent = tree_item
+                                sync_item.asset_parent = tree_item
 
-                            tree_item.sync_children.append(sync_item)
+                                tree_item.sync_children.append(sync_item)
 
-                            self.sync_items[p4_item.get("clientFile")] = sync_item
-                            self.sync_order.append(p4_item.get("clientFile"))
+                                self.sync_items[p4_item.get("clientFile")] = sync_item
+                                self.sync_order.append(p4_item.get("clientFile"))
+                            else:
+                                self.fw.log_debug("P4 Response is str:: " + str(p4_item))
 
                 # store data against the object for when we use sync command   
                 tree_item.asset_name = asset_name
