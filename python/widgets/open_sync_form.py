@@ -18,6 +18,9 @@ basepath = os.path.dirname(os.path.abspath(__file__))
 
 
 class SyncSignaller(QtCore.QObject):
+    """
+    Create signaller class, required for using signals due to QObject inheritance
+    """
     started = QtCore.Signal(str)
     finished = QtCore.Signal()
     progress = QtCore.Signal(tuple) # (path to sync, p4 sync response)
@@ -182,7 +185,8 @@ class SyncForm(QtGui.QWidget):
                 if item.get('root_path'):
 
                     # dry run the sync to see what is able to be sync'd
-                    sync_response = self.p4.run("sync", ["-n", "-f"], "{}".format(item.get('root_path')))
+                    f = ["-n"]
+                    sync_response = self.p4.run("sync", ["-n"], "{}#head".format(item.get('root_path')))
                     self.fw.log_debug("P4 log:" + str(sync_response))
 
                     # if nothing returned in sync dry-run, nothing required to sync
@@ -191,12 +195,12 @@ class SyncForm(QtGui.QWidget):
                         status_icon = "error"
                         detail = "Nothing in depot resolves [{}]".format(item.get('root_path'))
                     elif len(sync_response) is 1 and type(sync_response[0]) is str:
-                        status = "Nothing to Sync"
-                        status_icon = "validate"
-                        detail = "Nothing to sync for [{}]".format(item.get('root_path'))
+                        status = "Syncd"
+                        status_icon = "success"
+                        detail = "Nothing new to sync for [{}]".format(item.get('root_path'))
                     else:
                         # if the response from p4 has items... make UI elements for them
-                        status = "{} items to Sync".format(len(sync_response))
+                        status = "{} items to Sync".format(len([i for i in sync_response if type(i) != str]))
                         status_icon = "load"
 
                         for p4_item in sync_response:
@@ -297,11 +301,19 @@ class SyncForm(QtGui.QWidget):
             self.progress += 1
             self._progress_bar.setValue(self.progress)
             self._progress_bar.setFormat("Syncing {} %p%".format(item_name))
+
+            if self._progress_bar.value() == self._progress_bar.maximum():
+                self._progress_bar.setFormat("Sync complete %p%")
+                self._progress_bar.setVisible(False)
+                self._do.setEnabled(True)
+
         except Exception as e:
             self.fw.log_info(e)
 
 
     def start_sync(self):
+
+        self._do.setEnabled(False)
 
         self.progress = 0
 
@@ -334,7 +346,4 @@ class SyncForm(QtGui.QWidget):
             self.threadpool.start(worker)
             self.fw.log_debug("Sync for {} started on new worker thread.".format(path))
 
-    
-    def sync_completed(self):
-        self._progress_bar.setFormat("Sync complete %p%")
-        self._progress_bar.setVisible(False)
+
