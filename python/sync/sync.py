@@ -81,7 +81,7 @@ class SyncHandler(object):
             if result == QtGui.QDialog.Accepted:
                 pass
 
-        except Exception, e:
+        except Exception as e:
             self._fw.log_error(e)
 
         return None
