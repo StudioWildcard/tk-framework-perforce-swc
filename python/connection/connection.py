@@ -448,7 +448,7 @@ class ConnectionHandler(object):
             initial_workspace = self._get_current_workspace()
 
             # show the connection dialog:
-            result, _ = self._fw.engine.show_modal("Perforce Connection", self._fw, OpenConnectionForm,
+            result, _ = self._fw.engine.show_modal("Perforce Connectionmb", self._fw, OpenConnectionForm,
                                                    server, user, sg_user, initial_workspace, self._setup_connection_dlg)
 
             if result == QtGui.QDialog.Accepted:
