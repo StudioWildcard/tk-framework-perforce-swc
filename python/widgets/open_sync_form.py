@@ -22,7 +22,7 @@ basepath = os.path.dirname(os.path.abspath(__file__))
 
 class SyncSignaller(QtCore.QObject):
     """
-    Create signaller class, required for using signals due to QObject inheritance
+    Create signaller class for Sync Worker, required for using signals due to QObject inheritance
     """
     started = QtCore.Signal(dict)
     finished = QtCore.Signal()
@@ -30,9 +30,9 @@ class SyncSignaller(QtCore.QObject):
 
 class AssetInfoGatherSignaller(QtCore.QObject):
     """
-    Create signaller class, required for using signals due to QObject inheritance
+    Create signaller class for AssetInfoGather Worker, required for using signals due to QObject inheritance
     """
-    progress = QtCore.Signal()
+    progress = QtCore.Signal(str)
     info_gathered = QtCore.Signal(dict) 
     item_found_to_sync = QtCore.Signal(dict)
 
@@ -45,6 +45,9 @@ class SyncWorker(QtCore.QRunnable):
     asset_name = None
 
     def __init__(self):
+        """
+        Handles syncing specific file from perforce depot to local workspace on disk
+        """
         super(SyncWorker, self).__init__()
         self.signaller = SyncSignaller()
 
@@ -58,7 +61,7 @@ class SyncWorker(QtCore.QRunnable):
     def run(self):
         
         """
-        Ryn syncs from perforce. 
+        Ryn syncs from perforce, signals information back to main thread. 
         """
         self.p4 = self.fw.connection.connect()
 
@@ -68,9 +71,9 @@ class SyncWorker(QtCore.QRunnable):
             "sync_path" : self.path_to_sync
             }
         )
+
         # run the syncs
         p4_response = self.p4.run("sync", ["-f"], "{}#head".format(self.path_to_sync))
-
         self.fw.log_debug(p4_response)
 
         # emit item key and p4 response to main thread
@@ -80,13 +83,13 @@ class SyncWorker(QtCore.QRunnable):
             "response" : p4_response
             }
         )
-        # self.finished.emit()
+
 
 class AssetInfoGatherWorker(QtCore.QRunnable):
 
     def __init__(self, asset_item=None, framework=None):
         """
-        
+        Handles gathering information about specific asset from SG and gets related Perforce information
         """
         super(AssetInfoGatherWorker, self).__init__()
 
@@ -103,9 +106,6 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         self.info_gathered = self.signaller.info_gathered
         self.progress = self.signaller.progress
         self.item_found_to_sync = self.signaller.item_found_to_sync
-       
-
-
 
     @property
     def asset_name(self):
@@ -129,6 +129,9 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
 
     def collect_and_map_info(self):
+        """
+        Call perforce for response and form data we will signal back
+        """
         if self.status != 'error':
             self.get_perforce_sync_dry_reponse()
         self.info_to_signal = {
@@ -142,11 +145,14 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
 
     def get_perforce_sync_dry_reponse(self):
-
+        """
+        Get a response from perforce about our wish to sync a specific asset root path,
+        Contextually use response to drive our status that we show the user. 1
+        """
         if self.root_path:
             self.p4 = self.fw.connection.connect()
 
-            sync_response = self.p4.run("sync", ["-n"], "{}#head".format(self.root_path))
+            sync_response = self.p4.run("sync", ["-f","-n"], "{}#head".format(self.root_path))
             self.fw.log_debug("P4 log:" + str(sync_response))
 
 
@@ -167,17 +173,14 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                 self._detail = self.root_path
 
 
-
     @QtCore.Slot()
     def run(self):
-        
-        
+
         """
         Checks if there are errors in the item, signals that, or if not, gets info regarding what there is to sync. 
         """
         self.collect_and_map_info()
         if self.status != 'Syncd':
-            self.fw.log_debug("INFO GATHERED!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!:" + str(sync_response))
             self.info_gathered.emit(self.info_to_signal)
 
         for i in self._items_to_sync:
@@ -187,7 +190,13 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                 } 
             )
 
-        self.progress.emit()
+        # contextualize progress being displayed to user
+        progress_status_string = ""
+        if self.status == 'Syncd':
+            progress_status_string = " (Already Syncd. Skipping)"
+
+        self.progress.emit("Gathering info for {}{}".format(self.asset_name, progress_status_string))
+
 
 class SyncForm(QtGui.QWidget):
 
@@ -218,19 +227,27 @@ class SyncForm(QtGui.QWidget):
 
     @property
     def fw(self):
-        # implement framework if doesnt currently exist,  return it if it does
+        """
+        Implement framework if doesnt currently exist,  return it if it does
+        """
         if not self._fw:
             self._fw = sgtk.platform.current_bundle()
         return self._fw 
 
     @property
     def p4(self):
-        # initializes p4 as connection setup if it doesnt exist. Passes existing if it does. 
+        """
+        initializes p4 as connection setup if it doesnt exist. Passes existing if it does. 
+        """
         if not self._p4:
             self._p4 = self.fw.connection.connect()
         return self._p4
 
     def make_widgets(self):
+        """
+        Makes UI widgets for the main form
+        """
+
         # bring in global SG search widget when there arent Assets given already to the app
         # search_widget = sgtk.platform.import_framework("tk-framework-qtwidgets", "global_search_widget")
         # self.search_line_edit = search_widget.GlobalSearchWidget(self)    
@@ -243,7 +260,10 @@ class SyncForm(QtGui.QWidget):
         self._line_edit.setText(" ")
 
     def setup_ui(self):
-        
+        """
+        Lays out and customizes widgets for the main form
+        """       
+
         # set main layout
         self._main_layout = QtGui.QVBoxLayout()
         self.setLayout(self._main_layout)
@@ -271,6 +291,9 @@ class SyncForm(QtGui.QWidget):
 
 
     def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None):
+        """
+        Creates QTreeWidgetItem to display asset information
+        """
         tree_item = QtGui.QTreeWidgetItem()
 
         tree_item.setText(0, asset_name)
@@ -281,36 +304,32 @@ class SyncForm(QtGui.QWidget):
         self._asset_tree.addTopLevelItem(tree_item)
         return tree_item
 
+
     def make_sync_tree_item(self, sync_item_info):
+        """
+        Creates child QTreeWidgetItem under asset item to display filename and status of the sync
+        """
         self.fw.log_info('trying to make child item for {}'.format(sync_item_info))
-        try:
-            
-            asset_name = sync_item_info.get("asset_name")
-            item_found = sync_item_info.get("item_found")
-            tree_item = self._asset_items[asset_name].get("tree_widget")
 
-            child_tree_item = QtGui.QTreeWidgetItem(tree_item)
+        asset_name = sync_item_info.get("asset_name")
+        item_found = sync_item_info.get("item_found")
+        tree_item = self._asset_items[asset_name].get("tree_widget")
 
-            asset_file_path = item_found.get('clientFile') 
-            asset_file_name = os.path.basename(item_found.get('clientFile'))
-             
+        child_tree_item = QtGui.QTreeWidgetItem(tree_item)
 
-            child_tree_item.setText(0, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
-            child_tree_item.setText(1, "Ready")
-            child_tree_item.setText(2, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
-            child_tree_item.setIcon(1, self.make_icon("load"))
-
-
-            child_widgets = self._asset_items[asset_name].get("child_widgets")
-            child_widgets[ asset_file_path ] = child_tree_item
-        
-        
-        except Exception as e:
-            self.fw.log_error(str(e))
+        asset_file_path = item_found.get('clientFile') 
+        asset_file_name = os.path.basename(item_found.get('clientFile'))
             
 
-        
+        child_tree_item.setText(0, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
+        child_tree_item.setText(1, "Ready")
+        child_tree_item.setText(2, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
+        child_tree_item.setIcon(1, self.make_icon("load"))
 
+
+        child_widgets = self._asset_items[asset_name].get("child_widgets")
+        child_widgets[ asset_file_path ] = child_tree_item
+        
 
     def asset_info_handler(self, info_processed_dict):
         # self.fw.log_info("Receiving from a worker signal this time. It should be our new dict!!! -> \n{}".format(pprint.pformat(info_processed_dict)))
@@ -330,8 +349,11 @@ class SyncForm(QtGui.QWidget):
 
         # self._asset_item_info[info_processed_dict.get("asset_name")] = info_processed_dict.get("asset_item")
 
-    def iterate_progress(self, message="Gathering info"):
-         # iterate progress
+    def iterate_progress(self, message=""):
+        """
+        Iterate global progress counter and update the progressbar widget
+        Detect if progress is globally complete and handle hiding the progress widget
+        """
         self.progress += 1
         self._progress_bar.setValue(self.progress)
         self._progress_bar.setFormat("{} %p%".format(message))
@@ -342,7 +364,11 @@ class SyncForm(QtGui.QWidget):
             self._progress_bar.setVisible(False)
 
     def populate_assets(self):
-
+        """
+        Iterate through tk-multi-perforce delivered list of asset information, 
+        Utilize a global threadpool to process workers to ask P4 server for what 
+        there is to sync for these. 
+        """
         self.asset_item_registry = {}  
 
         self.sync_items = {}
@@ -357,202 +383,91 @@ class SyncForm(QtGui.QWidget):
         # iterate all parent assets
         for item in self.assets_to_sync:        
 
-            # make our worker to hand to a threadpool
-            # Needs:
-            #   - asset dict
-            #       - root_path to ask P4 for sync items, and to use a key for the items in main thread
-            #
-            #   - Call P4 to find items requiring syncing
-
-            # register our asset_item to main form
-
-            
-            # self._asset_item_info[self.get_asset_name(item)] = item
-
             asset_info_gather_worker = AssetInfoGatherWorker(asset_item=item, framework=self.fw)
 
             asset_info_gather_worker.info_gathered.connect( self.asset_info_handler )
-
             asset_info_gather_worker.progress.connect( self.iterate_progress )
-
             asset_info_gather_worker.item_found_to_sync.connect(self.make_sync_tree_item)
 
             self.threadpool.start(asset_info_gather_worker)
 
-            
-            
-            
-
-            """
-            status_icon = "success"
-
-            # grab asset info from our passed in asset list
-            asset = item.get("asset")
-            asset_name = asset.get('code')
-            if not asset_name:
-                asset_name = asset.get('name')
-            status = "Ready to Sync"
-
-            # if error was detected within the request step pre-ui: display it
-            if item.get('error'):
-                status_icon = "warning"
-                status = "Error"
-
-                # format sgtk exception as string to view
-                detail = str(item.get('error'))
-            else:
-                detail = item.get('root_path')
-            
-            # only add first instance of parent asset (to only process depo trees once.)
-            self.fw.log_debug("Adding item for {}".format(asset_name))
-
-            if not self._asset_items.get(asset_name):
-                
-                # make top-level item. Register it so we dont keep making items for the same parent
-                tree_item = QtGui.QTreeWidgetItem()
-                self._asset_items[asset_name] = tree_item
-
-                # simple list to keep track of eventual sync-items relating to this item 
-                tree_item.sync_children = []
-
-                # if asset item has a sgtk-created path to look for in the depot
-                if item.get('root_path'):
-
-                    # dry run the sync to see what is able to be sync'd
-                    f = ["-n"]
-                    sync_response = self.p4.run("sync", ["-n"], "{}#head".format(item.get('root_path')))
-                    self.fw.log_debug("P4 log:" + str(sync_response))
-
-                    # if nothing returned in sync dry-run, nothing required to sync
-                    if not sync_response:
-                        status = "Not In Depot"
-                        status_icon = "error"
-                        detail = "Nothing in depot resolves [{}]".format(item.get('root_path'))
-                    elif len(sync_response) is 1 and type(sync_response[0]) is str:
-                        status = "Syncd"
-                        status_icon = "success"
-                        detail = "Nothing new to sync for [{}]".format(item.get('root_path'))
-                    else:
-                        # if the response from p4 has items... make UI elements for them
-                        status = "{} items to Sync".format(len([i for i in sync_response if type(i) != str]))
-                        status_icon = "load"
-
-                        for p4_item in sync_response:
-                            if type(p4_item)==dict:
-                                sync_item = QtGui.QTreeWidgetItem(tree_item)
-                                sync_item.setText(1, "Ready")
-                                sync_item.setText(2, p4_item.get("clientFile"))
-                                sync_item_icon = QtGui.QIcon(os.path.join(basepath, 
-                                                                        'resources', 
-                                                                        "status_load.png"))
-                                sync_item.setIcon(1, sync_item_icon)
-                                sync_item.setText(0, p4_item.get("clientFile").split(os.sep)[-1])
-
-                                sync_item.asset_parent = tree_item
-
-                                tree_item.sync_children.append(sync_item)
-
-                                self.sync_items[p4_item.get("clientFile")] = sync_item
-                                self.sync_order.append(p4_item.get("clientFile"))
-                            else:
-                                self.fw.log_debug("P4 Response is string... : " + str(p4_item))
-
-                # store data against the object for when we use sync command   
-                tree_item.asset_name = asset_name
-                tree_item.asset_status = status
-                tree_item.asset_index = index
-
-                # set text fields on the asset tree item
-                tree_item.setText(0, asset_name )
-                tree_item.setText(1, status)
-                tree_item.setText(2, detail )
-
-                # set icon based on status
-                item_icon = self.make_icon(status_icon)
-                tree_item.setIcon(1, item_icon)
-
-                # newline the errors for easier tooltip reading
-                tree_item.setToolTip(2, detail.replace(". ", ".\n"))
-
-    
-        # sort the list, then populate items into the tree
-        asset_item_display_list = sorted([item for name, item in self._asset_items.items()], 
-                                            key=lambda k: (k.asset_status.lower(), k.asset_index ), reverse=True) 
-        for item in asset_item_display_list:
-            self._asset_tree.addTopLevelItem(item)
-        """
 
     def make_icon(self, name):
+        """
+        Helper to return QIcon from our limited icon schema used. 
+        """
         return QtGui.QIcon(os.path.join(basepath, 'resources', "status_{}.png".format(name)))
 
-    def populate_list(self):
-        for item in self.assets_to_sync:
-            self._list.addItem( str(item) )
-        
 
     def sync_in_progress(self, sync_item):
+        """
+        Handle signal from SyncWorker.started to inform user that sync has started within sync_item_widget. 
+        This sync_item_widget is looked up from our global asset dictionary using the signal payload arg [dict]
+        """
 
         asset_name = sync_item.get('asset_name')
         sync_path = sync_item.get("sync_path")
 
         sync_item_widget = self._asset_items[asset_name].get('child_widgets').get(sync_path)
+        asset_item_widget = self._asset_items[asset_name].get('tree_widget')
 
         icon  = self.make_icon("syncing")
         sync_item_widget.setIcon(1, icon)
         sync_item_widget.setText(1, "Syncing")
 
+        self._asset_tree.scrollTo(self._asset_tree.indexFromItem(sync_item_widget))
+        asset_item_widget.setExpanded(True)
+    
 
-    # handles .progress signal from SyncWorker
     def item_syncd(self, sync_item):
-        try:
-            # log status of sync for this item
-            asset_name = sync_item.get('asset_name')
-            sync_path = sync_item.get("sync_path")
-            response = sync_item.get('response')
+        """
+        Handle signal from SyncWorker.progress to display sync status in sync_item_widget. 
+        This sync_item_widget is looked up from our global asset dictionary using the signal payload arg [dict]
+        """
 
-            self.fw.log_debug(sync_path)
+        # log status of sync for this item
+        asset_name = sync_item.get('asset_name')
+        sync_path = sync_item.get("sync_path")
+        response = sync_item.get('response')
 
-            # look up the sync-item object since we're passing only a topic/string around via signal
-            sync_item_widget = self._asset_items[asset_name].get('child_widgets').get(sync_path)
-            asset_item_widget = self._asset_items[asset_name].get('tree_widget')
-            
+        self.fw.log_debug(sync_path)
 
-            # since we're getting this                                                                
-            icon  = self.make_icon("success")
-            sync_item_widget.setIcon(1, icon)
-            sync_item_widget.setText(1, "Syncd")
+        # look up the sync-item object since we're passing only a topic/string around via signal
+        child_widgets = self._asset_items[asset_name].get('child_widgets')
+        sync_item_widget = child_widgets.get(sync_path)
+        asset_item_widget = self._asset_items[asset_name].get('tree_widget')
+        
+        # since we're getting this                                                                
+        icon  = self.make_icon("success")
+        sync_item_widget.setIcon(1, icon)
+        sync_item_widget.setText(1, "Syncd")
 
-            # check how many asset children are still needing to be synced
-            # count_left_to_sync = len([i for i in item.asset_parent.sync_children if i.text(1)=="Ready"])
+        # check how many asset children are still needing to be synced
+        count_left_to_sync = len([sync_widget for sync_path,sync_widget in child_widgets.items() if sync_widget.text(1)=="Ready"])
 
-            # set parent
-            # parent_asset_status = "{} item{} to sync"
-            # plurality = ""
-            # if count_left_to_sync > 0:
-            #     if count_left_to_sync > 1:
-            #         plurality = "s"
+        # set parent
+        parent_asset_status = "{} item{} to sync"
+        plurality = ""
+        if count_left_to_sync > 0:
+            if count_left_to_sync > 1:
+                plurality = "s"
 
-                # set asset parent's status regarding count-left-to-sync
-            #     item.asset_parent.setText(1, parent_asset_status.format(count_left_to_sync, plurality))
-            # else:
-            #     # when all sync's are done...
-            #     icon  = self.make_icon("validate")
-            #     item.asset_parent.setIcon(1, icon)
-            #     item.asset_parent.setText(1,"Asset in Sync" )
+            # set asset parent's status regarding count-left-to-sync
+            asset_item_widget.setText(1, parent_asset_status.format(count_left_to_sync, plurality))
+        else:
+            # when all sync's are done...
+            icon  = self.make_icon("validate")
+            asset_item_widget.setIcon(1, icon)
+            asset_item_widget.setText(1,"Asset in Sync" )
 
-            # keep the sync-item in view
-            self._asset_tree.scrollTo(self._asset_tree.indexFromItem(sync_item_widget))
-            asset_item_widget.setExpanded(True)
-
-            # iterate progress
-
-            self.iterate_progress(message="Syncing")
-
-        except Exception as e:
-            self.fw.log_info(e)
+        self.iterate_progress(message="Syncing {}".format(sync_item_widget.text(0)))
 
 
     def start_sync(self):
+        """ 
+        Iterate through assets and their sync items to start workers for all paths that require syncs. 
+        Utilize a global threadpool to process
+        """
 
         self._do.setEnabled(False)
 
@@ -566,13 +481,11 @@ class SyncForm(QtGui.QWidget):
 
                 sync_worker.fw = self.fw
                 
-
                 sync_worker.started.connect(self.sync_in_progress)
                 # worker.finished.connect(self.sync_completed)
                 sync_worker.progress.connect(self.item_syncd)
 
                 workers.append(sync_worker)
-
                 
         self.progress = 0
 
@@ -580,7 +493,7 @@ class SyncForm(QtGui.QWidget):
         self._progress_bar.setRange(0, self.progress_maximum)
         self._progress_bar.setValue(0)
         self._progress_bar.setVisible(True)
-
+        self._progress_bar.setFormat("%p%")
 
         # make threadpool to take all workers and multithread their execution
         self.threadpool = QtCore.QThreadPool.globalInstance()
