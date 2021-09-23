@@ -46,7 +46,7 @@ class SyncHandler(object):
         self.p4_server = self._get_p4_server()
 
 
-    def sync_with_dlg(self, paths_to_sync):
+    def sync_with_dlg(self, app, entities_to_sync):
         """
         Present the connection dialog to the user and prompt them to connect in a thread-safe
         manner.
@@ -54,7 +54,8 @@ class SyncHandler(object):
         :returns: A connected, logged-in p4 instance if successful.
         """
 
-        self.paths_to_sync = paths_to_sync
+        self.entities_to_sync = entities_to_sync
+        self.app = app
 
         try:
             # ensure this always runs on the main thread:
@@ -76,7 +77,7 @@ class SyncHandler(object):
             from ..widgets import SyncForm
 
             result, _ = self._fw.engine.show_modal("Perforce Sync ", self._fw, SyncForm, 
-                                                   self.paths_to_sync)
+                                                   self.app, self.entities_to_sync)
 
             if result == QtGui.QDialog.Accepted:
                 pass
@@ -99,12 +100,12 @@ class SyncHandler(object):
         return str(sg_project.get(server_field))
 
 
-def sync_with_dialog(paths_to_sync=None):
+def sync_with_dialog(app, entities_to_sync):
     """
-    Show the Perforce connection dialog
+    Show the Perforce sync dialog
 
-    :returns P4:    A new Perforce connection instance if successful
+    :returns Qt UI:    A new Perforce sync dialog
     """
 
     fw = sgtk.platform.current_bundle()
-    return SyncHandler(fw).sync_with_dlg(paths_to_sync)
+    return SyncHandler(fw).sync_with_dlg(app, entities_to_sync)
