@@ -9,7 +9,7 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
-Common Perforce connection utility methods
+Common Perforce sync utility methods
 """
 
 import os
@@ -32,9 +32,9 @@ class SgtkP4Error(TankError):
 
 class SyncHandler(object):
     """
-    Encapsulate connecting to Perforce.  This pulls the settings from the various
-    different locations (config, Shotgun, user prefs) as well as being responsible
-    for prompting the user if needed (and UI is available)
+    Encapsulate loading sync window. Entity data is handed directly to the UI so that
+    it can delegate data lookups from p4 in workers rather than stall main thread while
+    user waits for visual feedback of the UI init completing.
     """
 
     def __init__(self, fw):
@@ -48,10 +48,9 @@ class SyncHandler(object):
 
     def sync_with_dlg(self, app, entities_to_sync):
         """
-        Present the connection dialog to the user and prompt them to connect in a thread-safe
-        manner.
+        Show the sync window for user file syncing
 
-        :returns: A connected, logged-in p4 instance if successful.
+        :returns: None
         """
 
         self.entities_to_sync = entities_to_sync
@@ -65,9 +64,9 @@ class SyncHandler(object):
         
     def _sync_with_dlg(self):
         """
-        Actual implementation of connect_with_dlg.
+        Actual implementation of sync_with_dlg.
 
-        :returns: A connected, logged-in p4 instance if successful.
+        :returns: None
         """
         server = self.p4_server
         sg_user = sgtk.util.get_current_user(self._fw.sgtk)
