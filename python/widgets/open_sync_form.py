@@ -16,7 +16,7 @@ import pprint
 import random
 import time
 
-from sync_workers import SyncWorker, AssetInfoGatherWorker
+from .sync_workers import SyncWorker, AssetInfoGatherWorker
 
 # file base for accessing Qt resources outside of resource scope
 basepath = os.path.dirname(os.path.abspath(__file__))
@@ -49,7 +49,14 @@ class SyncForm(QtGui.QWidget):
         self.setup_ui()
 
         # add assets and what we want to sync into the view
-        self.populate_assets()
+        if self.entities_to_sync:
+            self.populate_assets()
+        else:
+            self._do.setVisible(False)
+            self._asset_tree.setVisible(False)
+            self._progress_bar.setRange(0, 1)
+            self._progress_bar.setValue(0)
+            self.set_progress_message("Please use Perforce Sync with a chosen context. None detected.", percentf="")
 
     @property
     def fw(self):
@@ -178,9 +185,9 @@ class SyncForm(QtGui.QWidget):
         self._asset_items[info_processed_dict.get("asset_name")] = asset_UI_mapping
         
 
-    def set_progress_message(self, message=None):
+    def set_progress_message(self, message=None, percentf=" %p%"):
         self._progress_bar.setVisible(True)
-        self._progress_bar.setFormat("{} %p%".format(message))
+        self._progress_bar.setFormat("{}{}".format(message, percentf))
 
 
     def iterate_progress(self, message=None):
