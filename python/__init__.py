@@ -8,7 +8,7 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from . import connection
-from . import util
-from . import widgets
-from . import sync
+from .connection import *
+from .util import *
+from .widgets import *
+from .sync import *
