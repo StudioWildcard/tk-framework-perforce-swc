@@ -8,6 +8,7 @@ import time
 
 from ..sync.resolver import TemplateResolver
 
+
 class SyncSignaller(QtCore.QObject):
     """
     Create signaller class for Sync Worker, required for using signals due to QObject inheritance
@@ -191,7 +192,9 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
             progress_status_string = " (Nothing to sync. Skipping...)"
 
         if self.status != "Error":
+            
             for item in self._items_to_sync:
+                self.fw.log_info("Processed info for: {}".format(item.get('clientFile')))
                 self.item_found_to_sync.emit( {
                     "asset_name" : self.asset_name,
                     "item_found" : item
