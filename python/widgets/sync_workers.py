@@ -26,6 +26,7 @@ class AssetInfoGatherSignaller(QtCore.QObject):
     info_gathered = QtCore.Signal(dict) 
     item_found_to_sync = QtCore.Signal(dict)
     status_update = QtCore.Signal(str)
+    include_step = QtCore.Signal(str)
 
 class SyncWorker(QtCore.QRunnable):
 
@@ -103,6 +104,7 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         self.root_path_resolved = self.signaller.root_path_resolved
         self.item_found_to_sync = self.signaller.item_found_to_sync
         self.status_update = self.signaller.status_update
+        self.include_step = self.signaller.include_step
 
     @property
     def asset_name(self):
@@ -185,19 +187,31 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
         #self.fw.log_info(self.asset_item)
         self.collect_and_map_info()
-
-        if self.status != 'Syncd':
-            self.info_gathered.emit(self.info_to_signal)
-        else:
+        
+        self.info_gathered.emit(self.info_to_signal)
+        if self.status == 'Syncd':
             progress_status_string = " (Nothing to sync. Skipping...)"
 
         if self.status != "Error":
             
             for item in self._items_to_sync:
-                self.fw.log_info("Processed info for: {}".format(item.get('clientFile')))
+                step = None
+                # get steps
+                try:
+                    for t in ['env_asset_work_area', "asset_child_work_area", "asset_work_area", "anim_asset_work_area"]:
+                        template = self.app.sgtk.templates[t]
+                        fields = template.get_fields(item.get('clientFile'))
+                        if "Step" in fields.keys():
+                            step = fields.get('Step')
+                            self.include_step.emit( fields.get('Step') )
+
+                except Exception as e:
+                    template = str(e)
+                self.fw.log_info("TEMPLATE!!!! {}".format(str(template)))
                 self.item_found_to_sync.emit( {
                     "asset_name" : self.asset_name,
-                    "item_found" : item
+                    "item_found" : item,
+                    "step" : step
                     } 
                 )
         else:
