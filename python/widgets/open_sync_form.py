@@ -166,7 +166,7 @@ class SyncForm(QtGui.QWidget):
         self._do.clicked.connect(self.start_sync)
 
         width, height = self.prefs.data.get('window_size')
-        self.parent.resize(width, height)
+        # self.parent.resize(width, height)
 
         self.set_ui_interactive(False)
 
