@@ -37,6 +37,10 @@ PATH_REVISION_REGEX = re.compile("(?P<path>.+)#(?P<revision>[0-9]+)$")
 PATH_CHANGE_REGEX = re.compile("(?P<path>.+)@(?P<change>[0-9]+)$")
 
 
+class P4InvalidFileNameException(Exception):
+    pass
+
+
 def client_to_depot_paths(p4, client_paths):
     """
     Utility method to return a list of depot paths given a list of client/local
@@ -181,8 +185,14 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
     try:
         # as long as exception_level = 1, this will return [] if the file is not in the depo
         file_stat = p4.run_fstat(path)
-    except P4Exception as e:
-        raise TankError("Failed to run p4 fstat on file - %s" % (p4.errors[0] if p4.errors else e))
+    except Exception as e:
+        invalid_char_error_str = "Invalid changelist/client/label/date"
+        if invalid_char_error_str in str(e):
+            illegal_char = str(e).split(invalid_char_error_str)[-1]
+            raise P4InvalidFileNameException("""Invalid name for use in P4 repository: {}. 
+Illegal character in filename: {}""".format(os.path.basename(path), illegal_char[2:3]))
+        else:
+            raise TankError("Failed to run p4 fstat on file - %s" % (p4.errors[0] if p4.errors else e))
 
     # to edit the file in p4 we may need to do either an add or an edit depending on the
     # status of the file!
@@ -266,7 +276,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False):
 
             # add file to depot:
             try:
-                p4.run_add(path)
+                p4.run_add("-f", path)
             except P4Exception as e:
                 raise TankError("Failed to add file '%s' to depot - %s"
                                 % (path, p4.errors[0] if p4.errors else e))

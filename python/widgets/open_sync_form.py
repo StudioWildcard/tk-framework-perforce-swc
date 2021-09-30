@@ -48,7 +48,12 @@ class SyncForm(QtGui.QWidget):
         self._step_actions = {}
         self._filtered_away = []
 
+        # init preferences
         self.prefs = PrefFile()
+        if not self.prefs.data.get('hide_syncd'):
+            self.prefs.data['hide_syncd'] = True
+            self.prefs.write()
+            self.prefs.read()
 
         self.threadpool = QtCore.QThreadPool.globalInstance()
 

@@ -8,7 +8,9 @@ class PrefFile:
         
         self.read()
 
-    def write(self, data):
+    def write(self, data=None):
+        if not data:
+            data = self.data
         with open(self.pref_file, "w") as file_obj:
             json.dump(data, file_obj, indent=4)
 
