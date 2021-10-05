@@ -4,7 +4,7 @@ import json
 class PrefFile:
     def __init__(self):
         self.root_dir = os.path.expanduser("~")
-        self.pref_file = os.path.join(self.root_dir, "Documents", ".p4syncpref")
+        self.pref_file = os.path.join(self.root_dir, ".p4syncpref")
         
         self.read()
 

@@ -45,8 +45,15 @@ class SyncForm(QtGui.QWidget):
         self._asset_items = {}
         self._sync_items = {}
         self._step_options = []
-        self._step_actions = {}
+
         self._filtered_away = []
+
+        self.use_filters = ['Step', 'Type', 'Ext']
+        self.filter_sizes = {
+            "Step" : 80,
+            "Type" : 130,
+            "Ext" : 50
+        }
 
         # init preferences
         self.prefs = PrefFile()
@@ -56,6 +63,7 @@ class SyncForm(QtGui.QWidget):
             self.prefs.read()
 
         self.threadpool = QtCore.QThreadPool.globalInstance()
+        self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
 
         # creat UI elements and arrange them
         self.make_widgets()
@@ -107,8 +115,9 @@ class SyncForm(QtGui.QWidget):
 
         self._step_filter_label = QtGui.QLabel("Show/Sync Steps:")
         self._hide_syncd = QtGui.QCheckBox()
-        self._step_filter = QtGui.QToolButton()
-        self._step_menu = QtGui.QMenu()
+
+
+
         
 
     def setup_ui(self):
@@ -119,7 +128,10 @@ class SyncForm(QtGui.QWidget):
         self._main_layout = QtGui.QVBoxLayout()
         self._menu_layout = QtGui.QHBoxLayout()
 
-        self._main_layout.addLayout(self._menu_layout)
+
+
+
+        
         self.setLayout(self._main_layout)
 
         # hide progress until we run the sync
@@ -141,22 +153,15 @@ class SyncForm(QtGui.QWidget):
         self._hide_syncd.stateChanged.connect(self.filter_syncd_items )
         self._hide_syncd.setChecked(self.prefs.data.get('hide_syncd'))
 
-        self._step_filter.setMinimumWidth(90)
-        self._step_menu.setMinimumWidth(90)
-        self._step_filter.setText("Step Filters")
-        self._step_filter.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
-        self._step_filter.setMenu(self._step_menu)
-        self._step_filter.setPopupMode(QtGui.QToolButton.InstantPopup)
-        self._step_menu.setTearOffEnabled(True)
-        
+
+
         self._menu_layout.addWidget(self._hide_syncd)
-        
         self._menu_layout.addStretch()
         #self._menu_layout.addWidget(self._step_filter_label)
-        self._menu_layout.addWidget(self._step_filter)
         
 
         # arrange widgets in layout
+        self._main_layout.addLayout(self._menu_layout)
         self._main_layout.addWidget( self._asset_tree)
         self._main_layout.addWidget(self._progress_bar)
         self._main_layout.addWidget(self._do)
@@ -173,7 +178,38 @@ class SyncForm(QtGui.QWidget):
         width, height = self.prefs.data.get('window_size')
         # self.parent.resize(width, height)
 
+        for f in self.use_filters:
+            self.button_menu_factory(f)
+        
+
         self.set_ui_interactive(False)
+
+
+    def button_menu_factory(self, name= None ):
+
+        width = 80
+        short_name = name.lower().replace(" ", "")
+        if name in self.filter_sizes.keys():
+            width = self.filter_sizes.get(name)
+        
+        setattr(self, "_{}_filter".format(short_name), QtGui.QToolButton())
+        setattr(self, "_{}_menu".format(short_name), QtGui.QMenu())
+        setattr(self, "_{}_actions".format(short_name), {})
+
+        btn = getattr(self, "_{}_filter".format(short_name))
+        menu = getattr(self, "_{}_menu".format(short_name))
+       
+        btn.setFixedWidth(width) 
+        btn.setText(name)
+        btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        btn.setMenu(menu)
+        btn.setPopupMode(QtGui.QToolButton.InstantPopup)
+
+        menu.setFixedWidth(width)
+        menu.setTearOffEnabled(True)
+
+        self._menu_layout.addWidget(btn)
+
 
     def resizeEvent( self, event ):
         """
@@ -183,21 +219,33 @@ class SyncForm(QtGui.QWidget):
         self.save_ui_state()
 
 
-    def save_ui_state(self):
+    def save_ui_state(self, state_str=None):
         """
         Sync UI state and prefs locally to use for persistent UI features
         """
-        data = self.prefs.read()
-        data["hide_syncd"] = self._hide_syncd.isChecked()
+        self.fw.log_info("Saving state for UI: {}".format(state_str))
+        try:
+            data = self.prefs.read()
+            data["hide_syncd"] = self._hide_syncd.isChecked()
+            data['window_size'] = [self.width(), self.height()]
 
-        step_filters = {}
-        if data.get('step_filters'):
-            step_filters = data.get('step_filters')
-        for k,v in self._step_actions.items():
-            step_filters[k] = v.isChecked()
-        data['step_filters'] = step_filters
-        data['window_size'] = [self.width(), self.height()]
-        self.prefs.write(data)
+            # save step filters~
+            for f in self.use_filters:
+                f = f.lower()
+                filter_name = "{}_filters".format(f)
+                filter_data = {}
+
+                # use existing filter data if exists
+                if data.get(filter_name):
+                    filter_data = data.get(filter_name)
+                # overwrite it with  our scan of presently checked items
+                for k,v in getattr(self, "_{}_actions".format(f)).items():
+                    filter_data[k] = v.isChecked()
+                data[filter_name] = filter_data
+            
+                self.prefs.write(data)
+        except Exception as e:
+            self.fw.log_info(str(e))
 
     def filter_syncd_items(self):
         """
@@ -217,38 +265,50 @@ class SyncForm(QtGui.QWidget):
         except Exception as e:
             self.fw.log_info(str(e))
 
-
-    def filter_step_items(self):
+    
+    def filter_items(self):
         """
         Filter sync items away based on the step check-boxes
         """
         try:
-            self._filtered_away = []
+            self._filtered_away = {}
+            self._filtered_away['paths'] = []
             self.prefs.read()
-            step_filters = self.prefs.data.get('step_filters')
 
-            for asset_name, asset_dict in self._asset_items.items():
+            for f in self.use_filters:
+                f = f.lower()
+                self._filtered_away[f] = []
+                filters = self.prefs.data.get('{}_filters'.format(f))
 
-                if asset_dict.get('status') != "Syncd":
+                for asset_name, asset_dict in self._asset_items.items():
+
+                    if asset_dict.get('status') != "Syncd":
+                    
+                        for sync_path, sync_widget in asset_dict['child_widgets'].items():
+
+
+                            if sync_path not in self._filtered_away['paths']:
+                                filter_term = asset_dict['child_{}s'.format(f)].get(sync_path)
+                                if filter_term:
+
+                                    if filter_term in filters.keys():
                 
-                    for sync_path, sync_widget in asset_dict['child_widgets'].items():
-                        step = asset_dict['child_steps'].get(sync_path)
 
-                        if step in step_filters.keys():
-                            
-                            sync_widget.setHidden(not step_filters.get(step))
+                                        #self.fw.log_info("setting sync widget {} to {} : {}".format(sync_path, (not filters.get(filter_term)), filter_term))
+                                        sync_widget.setHidden(not filters.get(filter_term))
 
-                            # keep track for user of what isnt being shown to them
-                            if (not step_filters.get(step)) is True:
-                                self._filtered_away.append(sync_path)
+                                        # keep track for user of what isnt being shown to them
+                                        if (not filters.get(filter_term)) is True:
+                                            self._filtered_away[f].append(sync_path)
+                                            self._filtered_away['paths'].append(sync_path)
 
-                    self.update_sync_counter(asset_name) 
+                                    self.update_sync_counter(asset_name) 
 
-            # indicate to user that items being filtered from view
-            if len(self._filtered_away) > 0:
-                self._step_filter.setIcon(self.make_icon("filter"))
-            else:
-                self._step_filter.setIcon(QtGui.QIcon())     
+                # indicate to user that items being filtered from view
+                if len(self._filtered_away[f]) > 0:
+                    getattr(self, "_{}_filter".format(f)).setIcon(self.make_icon("filter"))
+                else:
+                    getattr(self, "_{}_filter".format(f)).setIcon(QtGui.QIcon())     
 
         except Exception as e:
             self.fw.log_info(str(e))
@@ -257,7 +317,11 @@ class SyncForm(QtGui.QWidget):
         """
         Common utility to lock the UI while info-gathering or syncing is occuring
         """
-        self._step_filter.setEnabled(state)
+        # toggle the installed filters
+        for f in self.use_filters:
+            f = f.lower()
+            getattr(self, "_{}_filter".format(f)).setEnabled(state)
+
         self._hide_syncd.setEnabled(state)
         self._do.setEnabled(state)
 
@@ -286,34 +350,38 @@ class SyncForm(QtGui.QWidget):
             tree_widget.setIcon(1, self.make_icon('validate'))
 
 
-    def update_steps_available(self, step):
+    def update_available_filters(self, filter_info):
         """
         Populate the steps filter menu as steps are discovered in the p4 scan search
         """
         try:
-            if step not in self._step_actions.keys():
+            filter_type = filter_info[0]
+            filter_value = filter_info[1]
+
+            if filter_value not in getattr(self, "_{}_actions".format(filter_type)).keys():
                 action = QtGui.QAction(self)
                 
                 action.setCheckable(True)
 
                 self.prefs.read()
-                step_filters = self.prefs.data.get('step_filters')
+                filters = self.prefs.data.get('{}_filters'.format(filter_type))
                 check_state = True
-                if step in step_filters.keys():
-                    check_state = step_filters[step]
+                if filter_value in filters.keys():
+                    check_state = filters[filter_value]
                 
 
                 action.setChecked(check_state)
-                action.setText(str(step))
+                action.setText(str(filter_value))
                 action.triggered.connect(self.save_ui_state)
-                action.triggered.connect(self.filter_step_items)
+                action.triggered.connect(self.filter_items)
 
-                self._step_menu.addAction(action)
-        
-                self._step_actions[step] = action
+                getattr(self, "_{}_menu".format(filter_type)).addAction(action)
+                getattr(self, "_{}_actions".format(filter_type))[filter_value] = action
+
         except Exception as e:
             self.fw.log_info(str(e))
 
+    
     def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None):
         """
         Creates QTreeWidgetItem to display asset information
@@ -340,37 +408,48 @@ class SyncForm(QtGui.QWidget):
         Creates child QTreeWidgetItem under asset item to display filename and status of the sync
         """
         #self.fw.log_info('trying to make child item for {}'.format(sync_item_info))
+        try:
+            asset_name = sync_item_info.get("asset_name")
+            item_found = sync_item_info.get("item_found")
+            step = sync_item_info.get('step')
+            file_type = sync_item_info.get('file_type')
 
-        asset_name = sync_item_info.get("asset_name")
-        item_found = sync_item_info.get("item_found")
-        step = sync_item_info.get('step')
+            tree_item = self._asset_items[asset_name].get("tree_widget")
 
-        tree_item = self._asset_items[asset_name].get("tree_widget")
+            child_tree_item = QtGui.QTreeWidgetItem(tree_item)
 
-        child_tree_item = QtGui.QTreeWidgetItem(tree_item)
+            asset_file_path = item_found.get('clientFile') 
+            asset_file_name = os.path.basename(item_found.get('clientFile'))
 
-        asset_file_path = item_found.get('clientFile') 
-        asset_file_name = os.path.basename(item_found.get('clientFile'))
 
-        if step:
-            step_filters = self.prefs.data.get('step_filters')
-            if step in step_filters.keys():
-                child_tree_item.setHidden(not step_filters.get(step))
+            filtered = None
+
+            for f in self.use_filters:
+                f = f.lower()
+                if sync_item_info.get(f):
+                    filter_term = sync_item_info.get(f)
+                    filters = self.prefs.data.get('{}_filters'.format(f))
+                    if filter_term in filters.keys():
+                        if not filtered:
+                            child_tree_item.setHidden(not filters.get(step))
+                            filtered = True
+
+                    child_filter_term = self._asset_items[asset_name].get("child_{}s".format(f))  
+                    child_filter_term[asset_file_path] = filter_term
+
+
+            child_tree_item.setText(self.ASSET_NAME, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
+            child_tree_item.setText(self.STATUS, "Ready")
+            child_tree_item.setText(self.DETAIL, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
+            child_tree_item.setIcon(self.STATUS, self.make_icon("load"))
+
             
+            child_widgets = self._asset_items[asset_name].get("child_widgets")
+            child_widgets[ asset_file_path ] = child_tree_item
 
-        child_tree_item.setText(self.ASSET_NAME, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
-        child_tree_item.setText(self.STATUS, "Ready")
-        child_tree_item.setText(self.DETAIL, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
-        child_tree_item.setIcon(self.STATUS, self.make_icon("load"))
-
-        child_steps = self._asset_items[asset_name].get("child_steps")  
-        child_steps[asset_file_path] = step
-        
-        child_widgets = self._asset_items[asset_name].get("child_widgets")
-        child_widgets[ asset_file_path ] = child_tree_item
-
-        self.update_sync_counter(asset_name)
-
+            self.update_sync_counter(asset_name)
+        except Exception as e:
+            self.fw.log_info(str(e))
         
 
     def asset_info_handler(self, info_processed_dict):
@@ -388,7 +467,9 @@ class SyncForm(QtGui.QWidget):
         asset_UI_mapping['asset_info']= info_processed_dict.get("asset_item")
         asset_UI_mapping['status'] = info_processed_dict.get("status")
         asset_UI_mapping['child_widgets'] = {}
-        asset_UI_mapping['child_steps'] = {}
+
+        for f in self.use_filters:
+            asset_UI_mapping['child_{}s'.format(f.lower())] = {}
 
         self._asset_items[info_processed_dict.get("asset_name")] = asset_UI_mapping
         
@@ -417,7 +498,7 @@ class SyncForm(QtGui.QWidget):
 
             self.set_ui_interactive(True)
 
-            self.filter_step_items()
+            self.filter_items()
 
 
     def populate_assets(self):
@@ -426,6 +507,7 @@ class SyncForm(QtGui.QWidget):
         Utilize a global threadpool to process workers to ask P4 server for what 
         there is to sync for these. 
         """
+        
         self.asset_item_registry = {}  
 
         self.sync_items = {}
@@ -449,7 +531,7 @@ class SyncForm(QtGui.QWidget):
             asset_info_gather_worker.progress.connect( self.iterate_progress )
             asset_info_gather_worker.item_found_to_sync.connect(self.make_sync_tree_item)
             asset_info_gather_worker.status_update.connect(self.set_progress_message)
-            asset_info_gather_worker.include_step.connect(self.update_steps_available)
+            asset_info_gather_worker.includes.connect(self.update_available_filters)
 
             self.threadpool.start(asset_info_gather_worker)
 
@@ -559,6 +641,7 @@ class SyncForm(QtGui.QWidget):
 
         # make threadpool to take all workers and multithread their execution
         self.threadpool = QtCore.QThreadPool.globalInstance()
+        self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
 
         self.fw.log_debug("Starting Threaded P4 Sync...")
 
