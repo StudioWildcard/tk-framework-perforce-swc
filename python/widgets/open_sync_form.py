@@ -49,6 +49,11 @@ class SyncForm(QtGui.QWidget):
         self._filtered_away = []
 
         self.use_filters = ['Step', 'Type', 'Ext']
+        self.filter_sizes = {
+            "Step" : 80,
+            "Type" : 130,
+            "Ext" : 50
+        }
 
         # init preferences
         self.prefs = PrefFile()
@@ -181,7 +186,12 @@ class SyncForm(QtGui.QWidget):
 
 
     def button_menu_factory(self, name= None ):
+
+        width = 80
         short_name = name.lower().replace(" ", "")
+        if name in self.filter_sizes.keys():
+            width = self.filter_sizes.get(name)
+        
         setattr(self, "_{}_filter".format(short_name), QtGui.QToolButton())
         setattr(self, "_{}_menu".format(short_name), QtGui.QMenu())
         setattr(self, "_{}_actions".format(short_name), {})
@@ -189,18 +199,16 @@ class SyncForm(QtGui.QWidget):
         btn = getattr(self, "_{}_filter".format(short_name))
         menu = getattr(self, "_{}_menu".format(short_name))
        
-        btn.setFixedWidth(80) 
+        btn.setFixedWidth(width) 
         btn.setText(name)
         btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
         btn.setMenu(menu)
         btn.setPopupMode(QtGui.QToolButton.InstantPopup)
 
-        menu.setFixedWidth(80)
+        menu.setFixedWidth(width)
         menu.setTearOffEnabled(True)
 
         self._menu_layout.addWidget(btn)
-
-        #
 
 
     def resizeEvent( self, event ):
