@@ -108,7 +108,10 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
     @property
     def asset_name(self):
-        return self.asset_item.get('context').entity.get('name')
+        name = self.asset_item.get('context').entity.get('name')
+        if not name:
+            name = self.entity.get('code')
+        return name
         
     @property
     def root_path(self):
