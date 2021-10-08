@@ -117,8 +117,7 @@ class SyncForm(QtGui.QWidget):
         self._hide_syncd = QtGui.QCheckBox()
 
 
-
-        
+       
 
     def setup_ui(self):
         """
@@ -127,10 +126,6 @@ class SyncForm(QtGui.QWidget):
         # set main layout
         self._main_layout = QtGui.QVBoxLayout()
         self._menu_layout = QtGui.QHBoxLayout()
-
-
-
-
         
         self.setLayout(self._main_layout)
 
@@ -147,6 +142,7 @@ class SyncForm(QtGui.QWidget):
         self._asset_tree.setHeaderItem(self._asset_tree_header)  
         self._asset_tree.setWordWrap(True)
         self._asset_tree.setColumnWidth(0, 150)
+        self._asset_tree.setColumnWidth(1, 160)
 
         self._hide_syncd.setText("Hide if nothing to sync")
         self._hide_syncd.stateChanged.connect(self.save_ui_state)
@@ -187,11 +183,18 @@ class SyncForm(QtGui.QWidget):
 
     def button_menu_factory(self, name= None ):
 
+        name_map = {
+            "type": "Publish Type"
+        }
+        
+
         width = 80
         short_name = name.lower().replace(" ", "")
         if name in self.filter_sizes.keys():
             width = self.filter_sizes.get(name)
-        
+        # if short_name in name_map.keys():
+        #     name = name_map.get(short_name)
+
         setattr(self, "_{}_filter".format(short_name), QtGui.QToolButton())
         setattr(self, "_{}_menu".format(short_name), QtGui.QMenu())
         setattr(self, "_{}_actions".format(short_name), {})
@@ -239,8 +242,11 @@ class SyncForm(QtGui.QWidget):
                 if data.get(filter_name):
                     filter_data = data.get(filter_name)
                 # overwrite it with  our scan of presently checked items
-                for k,v in getattr(self, "_{}_actions".format(f)).items():
-                    filter_data[k] = v.isChecked()
+                actions = getattr(self, "_{}_actions".format(f))
+                if actions:
+                    for k,v in actions.items():
+                        filter_data[k] = v.isChecked()
+
                 data[filter_name] = filter_data
             
                 self.prefs.write(data)
@@ -254,13 +260,21 @@ class SyncForm(QtGui.QWidget):
         try:
             
             hide_syncd_checkstate = self._hide_syncd.isChecked()
-
+            hid = 0
             for asset_name, asset_dict in self._asset_items.items():
                 asset_status = asset_dict.get('status')
                 if asset_status == "Syncd":
 
                     tree_item = asset_dict.get("tree_widget")
                     tree_item.setHidden(hide_syncd_checkstate)
+                    if hide_syncd_checkstate is True:
+                        hid += 1
+            checkbox_text = "Hide if nothing to sync"
+            if hid:
+                checkbox_text += " ({} hidden)".format(hid)
+            self._hide_syncd.setText(checkbox_text)
+
+            
                 
         except Exception as e:
             self.fw.log_info(str(e))
@@ -302,7 +316,7 @@ class SyncForm(QtGui.QWidget):
                                             self._filtered_away[f].append(sync_path)
                                             self._filtered_away['paths'].append(sync_path)
 
-                                    self.update_sync_counter(asset_name) 
+                        self.update_sync_counter(asset_name) 
 
                 # indicate to user that items being filtered from view
                 if len(self._filtered_away[f]) > 0:
@@ -336,17 +350,18 @@ class SyncForm(QtGui.QWidget):
 
         count_to_sync = len(items_to_sync)
 
-        parent_asset_status = "{} item{} to sync"
+        parent_asset_status = "{} to sync"
         plurality = ""
-        if count_to_sync > 0:
-            if count_to_sync > 1:
-                plurality = "s"
 
+        filtered = unfiltered_sync_count-count_to_sync
+
+        status = parent_asset_status.format(count_to_sync)
+        if count_to_sync > 0:
             # set asset parent's status regarding count-left-to-sync
-            tree_widget.setText(1, parent_asset_status.format(count_to_sync, plurality))
+            tree_widget.setText(1, status)
             tree_widget.setIcon(1, self.make_icon('load'))
-        else:
-            tree_widget.setText(1, "{} Files filtered".format(unfiltered_sync_count-count_to_sync))
+        if filtered:
+            tree_widget.setText(1, "{} ({} filtered)".format(status, filtered))
             tree_widget.setIcon(1, self.make_icon('validate'))
 
 
@@ -358,7 +373,10 @@ class SyncForm(QtGui.QWidget):
             filter_type = filter_info[0]
             filter_value = filter_info[1]
 
-            if filter_value not in getattr(self, "_{}_actions".format(filter_type)).keys():
+
+            actions = getattr(self, "_{}_actions".format(filter_type))
+            #if actions:
+            if filter_value not in actions.keys():
                 action = QtGui.QAction(self)
                 
                 action.setCheckable(True)
@@ -376,7 +394,7 @@ class SyncForm(QtGui.QWidget):
                 action.triggered.connect(self.filter_items)
 
                 getattr(self, "_{}_menu".format(filter_type)).addAction(action)
-                getattr(self, "_{}_actions".format(filter_type))[filter_value] = action
+                actions[filter_value] = action
 
         except Exception as e:
             self.fw.log_info(str(e))
@@ -412,7 +430,7 @@ class SyncForm(QtGui.QWidget):
             asset_name = sync_item_info.get("asset_name")
             item_found = sync_item_info.get("item_found")
             step = sync_item_info.get('step')
-            file_type = sync_item_info.get('file_type')
+            file_type = sync_item_info.get('type')
 
             tree_item = self._asset_items[asset_name].get("tree_widget")
 
@@ -431,9 +449,9 @@ class SyncForm(QtGui.QWidget):
                     filters = self.prefs.data.get('{}_filters'.format(f))
                     if filter_term in filters.keys():
                         if not filtered:
-                            child_tree_item.setHidden(not filters.get(step))
+                            child_tree_item.setHidden(not filters.get(filter_term))
                             filtered = True
-
+                            self.update_sync_counter(asset_name)
                     child_filter_term = self._asset_items[asset_name].get("child_{}s".format(f))  
                     child_filter_term[asset_file_path] = filter_term
 
@@ -447,7 +465,8 @@ class SyncForm(QtGui.QWidget):
             child_widgets = self._asset_items[asset_name].get("child_widgets")
             child_widgets[ asset_file_path ] = child_tree_item
 
-            self.update_sync_counter(asset_name)
+            #self.filter_items
+            
         except Exception as e:
             self.fw.log_info(str(e))
         
@@ -499,6 +518,7 @@ class SyncForm(QtGui.QWidget):
             self.set_ui_interactive(True)
 
             self.filter_items()
+            self.filter_syncd_items()
 
 
     def populate_assets(self):
