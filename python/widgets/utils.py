@@ -1,5 +1,6 @@
 import os
 import json
+import webbrowser
 
 class PrefFile:
     def __init__(self):
@@ -22,3 +23,9 @@ class PrefFile:
             self.data = json.load(file_obj)
             return self.data
 
+
+def open_browser(path):
+    """
+    Open file in a local file browser using file path uri
+    """
+    webbrowser.open('file:///' + path)
