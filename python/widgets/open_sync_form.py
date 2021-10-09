@@ -15,9 +15,12 @@ import traceback
 import pprint
 import random
 import time
+import sys
+
+from functools import partial
 
 from .sync_workers import SyncWorker, AssetInfoGatherWorker
-from .utils import PrefFile
+from .utils import PrefFile, open_browser
 
 # file base for accessing Qt resources outside of resource scope
 basepath = os.path.dirname(os.path.abspath(__file__))
@@ -171,29 +174,22 @@ class SyncForm(QtGui.QWidget):
         # signal connections
         self._do.clicked.connect(self.start_sync)
 
-        width, height = self.prefs.data.get('window_size')
-        # self.parent.resize(width, height)
-
         for f in self.use_filters:
             self.button_menu_factory(f)
         
+        # connect right_click_menu to tree
+        self._asset_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
+        self._asset_tree.customContextMenuRequested.connect(self.open_context_menu)
 
         self.set_ui_interactive(False)
 
 
     def button_menu_factory(self, name= None ):
 
-        name_map = {
-            "type": "Publish Type"
-        }
-        
-
         width = 80
         short_name = name.lower().replace(" ", "")
         if name in self.filter_sizes.keys():
             width = self.filter_sizes.get(name)
-        # if short_name in name_map.keys():
-        #     name = name_map.get(short_name)
 
         setattr(self, "_{}_filter".format(short_name), QtGui.QToolButton())
         setattr(self, "_{}_menu".format(short_name), QtGui.QMenu())
@@ -220,6 +216,36 @@ class SyncForm(QtGui.QWidget):
         """
         QtGui.QWidget.resizeEvent( self, event )
         self.save_ui_state()
+
+
+
+
+
+    def open_context_menu(self, point):
+        # Infos about the node selected.
+        try:
+            os_filebrowser_map = {
+                "win32" : "Explorer",
+                "darwin" : "Finder"
+            }
+            os_filebrowser = "file browser"
+            if sys.platform in os_filebrowser_map.keys():
+                os_filebrowser = os_filebrowser_map[sys.platform]
+            
+            tree_item = self._asset_tree.itemAt(point)
+            path_to_open = os.path.dirname(tree_item.data(2, QtCore.Qt.UserRole))
+        
+
+            menu = QtGui.QMenu()
+            action = menu.addAction("Open path in {}".format(os_filebrowser), 
+                                    partial(open_browser, path_to_open))
+                
+            menu.exec_(self._asset_tree.mapToGlobal(point))
+
+        except Exception as e:
+            self.fw.log_error(e)
+
+
 
 
     def save_ui_state(self, state_str=None):
@@ -400,7 +426,7 @@ class SyncForm(QtGui.QWidget):
             self.fw.log_info(str(e))
 
     
-    def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None):
+    def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None, root_path=None):
         """
         Creates QTreeWidgetItem to display asset information
         """
@@ -414,6 +440,9 @@ class SyncForm(QtGui.QWidget):
         tree_item.setText(self.STATUS, status)
         tree_item.setText(self.DETAIL, details)
         tree_item.setIcon(self.STATUS, self.make_icon(icon))
+
+        if root_path:
+            tree_item.setData(2, QtCore.Qt.UserRole, root_path)
 
         self._asset_tree.addTopLevelItem(tree_item)
 
@@ -460,6 +489,7 @@ class SyncForm(QtGui.QWidget):
             child_tree_item.setText(self.STATUS, "Ready")
             child_tree_item.setText(self.DETAIL, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
             child_tree_item.setIcon(self.STATUS, self.make_icon("load"))
+            child_tree_item.setData(2, QtCore.Qt.UserRole, asset_file_path)
 
             
             child_widgets = self._asset_items[asset_name].get("child_widgets")
@@ -478,7 +508,8 @@ class SyncForm(QtGui.QWidget):
         tree_widget = self.make_top_level_tree_item(asset_name=info_processed_dict.get("asset_name"),
                                       status= info_processed_dict.get("status"),
                                       details= info_processed_dict.get("details"),
-                                      icon = info_processed_dict.get("icon")                              
+                                      icon = info_processed_dict.get("icon"),
+                                      root_path = info_processed_dict.get("root_path")                         
         )
         
         asset_UI_mapping = {}
