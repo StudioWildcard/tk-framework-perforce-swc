@@ -136,6 +136,7 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         # payload that we'll send back to the main thread to make UI item with
         self.info_to_signal = {
             "asset_name": self.asset_name,   
+            "root_path" : self.root_path,
             "status" : self._status,
             "details" : self._detail,
             "icon" : self._icon,
