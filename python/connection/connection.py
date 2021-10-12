@@ -30,7 +30,10 @@ class SgtkP4Error(TankError):
     """
     Specialisation of TankError raised after catching and processing a P4Exception
     """
-
+class SgtkP4TCPConnectionError(TankError):
+    """
+    Specialisation of TankError raised after catching and processing a P4Exception that deals with no TCP connections
+    """
 
 # global connection rlock to ensure that attempting to connect to Perforce happens exclusively.  This
 # stops the user from being presented with multiple password entry dialogs if the framework needs to
@@ -114,7 +117,7 @@ class ConnectionHandler(object):
                 if mo:
                     msg = msg[mo.end():]
 
-            raise SgtkP4Error(msg)
+            raise SgtkP4TCPConnectionError(msg)
 
         self._p4 = p4
         return self._p4
@@ -344,8 +347,8 @@ class ConnectionHandler(object):
             # first, attempt to connect to the server:
             try:
                 self.connect_to_server()
-            except SgtkP4Error as e:
-                raise TankError("Perforce: Failed to connect to perforce server '%s' - %s" % (server, e))
+            except SgtkP4TCPConnectionError as e:
+                raise 
 
             # then ensure that the connection is trusted:
             try:
@@ -401,7 +404,9 @@ class ConnectionHandler(object):
         except TankError as e:
             # failed to connect to server - switch to UI mode
             # if available instead:
-            if allow_ui and self._fw.engine.execute_in_main_thread(self.__has_ui):
+            if isinstance(e, SgtkP4TCPConnectionError):
+                raise
+            elif allow_ui and self._fw.engine.execute_in_main_thread(self.__has_ui):
                 # just show the connection UI instead:
                 return self.connect_with_dlg()
             else:
@@ -787,7 +792,10 @@ def connect(allow_ui=True, user=None, password=None, workspace=None):
     :returns P4:        A new Perforce connection instance if successful
     """
     fw = sgtk.platform.current_bundle()
-    return ConnectionHandler(fw).connect(allow_ui, user, password, workspace)
+    try:
+        return ConnectionHandler(fw).connect(allow_ui, user, password, workspace)
+    except SgtkP4TCPConnectionError:
+        raise
 
 
 def connect_with_dialog():
