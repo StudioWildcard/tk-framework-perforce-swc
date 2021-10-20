@@ -24,6 +24,7 @@ from sgtk.platform.qt import QtGui
 from P4 import P4, P4Exception
 
 from .user_settings import UserSettings
+from ..util.progress import ProgressHandler
 
 
 class SgtkP4Error(TankError):
@@ -779,7 +780,7 @@ class ConnectionHandler(object):
         return str(sg_project.get(server_field))
 
 
-def connect(allow_ui=True, user=None, password=None, workspace=None):
+def connect(allow_ui=True, user=None, password=None, workspace=None, progress=None):
     """
     Connect to Perforce
 
@@ -793,7 +794,10 @@ def connect(allow_ui=True, user=None, password=None, workspace=None):
     """
     fw = sgtk.platform.current_bundle()
     try:
-        return ConnectionHandler(fw).connect(allow_ui, user, password, workspace)
+        connection = ConnectionHandler(fw).connect(allow_ui, user, password, workspace)
+        if progress:
+            connection.progress = ProgressHandler()
+        return connection
     except SgtkP4TCPConnectionError:
         raise
 
