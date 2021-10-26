@@ -43,7 +43,10 @@ class P4Reconciler:
 
 
     def __getattr__(self, item):
-        avail_actions = ['add', "edit", "delete"]
+        """
+        Intercept action info retrievals and return them on the fly
+        """
+        avail_actions = list(self.actions.keys())
         avail_action_info_list = ["{}_info".format(i) for i in avail_actions]
         avail_action_file_list = ["{}_files".format(i) for i in avail_actions]
         actions =  self.__dict__.get('actions')
@@ -74,9 +77,11 @@ class P4Reconciler:
 
     def reset_collection(self):
         self.actions = {
-            "add" : [],
-            "edit": [],
-            "delete": []
+            "add" :   [],
+            "edit":   [],
+            "delete": [],
+            "move" :  [],
+            "open" :  []
         }
 
     def recursive_scan(self, path=None):
@@ -91,18 +96,21 @@ class P4Reconciler:
 
         if path:
             self.root_path = path
+        logger.debug("Starting the reconcile scan....") 
 
-        logger.debug("Starting the reconcile scan....")
+        opened = self.p4.run('opened', os.path.join(self.root_path, "..."))   
+        self.actions.get('open').extend(opened)
+        
         for root, dirs, files in os.walk(self.root_path):
 
+            # run for reconcile-specific calls
             response = self.p4.run('reconcile', "-n", os.path.join(root, "*"))
             if response:
-                
                 for item in response:
                     if type(item)==dict:
-                        action = item.get('action')
+                        action = item.get('action') 
                         if action:
-                            self.actions.get(action).append(item)
+                            self.actions.get(action.split("/")[0]).append(item)
 
 
 def recursive_reconcile(path):
