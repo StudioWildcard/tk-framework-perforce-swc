@@ -60,6 +60,10 @@ class P4Reconciler:
             " paths for each.".format(item, avail_action_info_list, avail_action_file_list))
 
     @property
+    def root(self):
+        return self.p4.fetch_client()._root
+
+    @property
     def p4(self):
         return self._p4
 
@@ -84,6 +88,20 @@ class P4Reconciler:
             "open" :  []
         }
 
+    @property
+    def opened_files(self):
+        opened = self.p4.run('opened', os.path.join(self.root_path, "...")) 
+        reformatted = []
+        for open_item in opened:
+            if open_item.get('client') == self.p4.client:
+                client_file = open_item.get('clientFile')
+                formatted_client_file = self.root + client_file.replace("//{}/".format(self.p4.client), "").replace("/", "\\")
+                open_item['clientFile'] = formatted_client_file
+                reformatted.append(open_item)
+
+        return reformatted
+
+
     def recursive_scan(self, path=None):
         """
         Scan the chosen directory recursively, reconcile status of
@@ -96,15 +114,15 @@ class P4Reconciler:
 
         if path:
             self.root_path = path
-        logger.debug("Starting the reconcile scan....") 
+        logger.debug("Starting the reconcile scan....")   
 
-        opened = self.p4.run('opened', os.path.join(self.root_path, "..."))   
-        self.actions.get('open').extend(opened)
-        
+        # get opened files
+        self.actions['open'].extend(self.opened_files)
+ 
         for root, dirs, files in os.walk(self.root_path):
 
             # run for reconcile-specific calls
-            response = self.p4.run('reconcile', "-n", os.path.join(root, "*"))
+            response = self.p4.run('reconcile', "-m", "-n", os.path.join(root, "*"))
             if response:
                 for item in response:
                     if type(item)==dict:
