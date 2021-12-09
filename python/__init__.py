@@ -7,7 +7,8 @@
 # By accessing, using, copying or modifying this work you indicate your
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
-
-from . import connection
-from . import util
-from . import widgets
+__all__ = ["connection", "sync", "widgets", "util"]
+from .connection import *
+from .util import *
+from .widgets import *
+from .sync import *
