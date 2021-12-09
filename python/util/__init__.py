@@ -12,4 +12,4 @@ from .files import get_client_file_details, get_depot_file_details, sync_publish
 from .files import client_to_depot_paths, depot_to_client_paths, P4InvalidFileNameException
 from .change import create_change, add_to_change, find_change_containing, submit_change, get_change_details
 from .url import url_from_depot_path, depot_path_from_url
-from .reconcile import recursive_reconcile
+from .reconcile import reconcile_files
