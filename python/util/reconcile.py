@@ -121,7 +121,7 @@ class P4Reconciler:
  
         # run for reconcile-specific calls
         if os.path.isdir(self.root_path):
-            response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "*"))
+            response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "..."))
         else:
             response = self.p4.run('reconcile', "-m", "-n", self.root_path)
 
