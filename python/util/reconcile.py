@@ -102,7 +102,7 @@ class P4Reconciler:
         return reformatted
 
 
-    def recursive_scan(self, path=None):
+    def scan(self, path=None):
         """
         Scan the chosen directory recursively, reconcile status of
         local file state against Perforce server. 
@@ -119,22 +119,24 @@ class P4Reconciler:
         # get opened files
         self.actions['open'].extend(self.opened_files)
  
-        for root, dirs, files in os.walk(self.root_path):
+        # run for reconcile-specific calls
+        if os.path.isdir(self.root_path):
+            response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "..."))
+        else:
+            response = self.p4.run('reconcile', "-m", "-n", self.root_path)
 
-            # run for reconcile-specific calls
-            response = self.p4.run('reconcile', "-m", "-n", os.path.join(root, "*"))
-            if response:
-                for item in response:
-                    if type(item)==dict:
-                        action = item.get('action') 
-                        if action:
-                            self.actions.get(action.split("/")[0]).append(item)
+        if response:
+            for item in response:
+                if type(item)==dict:
+                    action = item.get('action') 
+                    if action:
+                        self.actions.get(action.split("/")[0]).append(item)
 
 
-def recursive_reconcile(path):
+def reconcile_files(path):
     fw = sgtk.platform.current_bundle()
     p4 = fw.connection.connect()
 
     reconciler = P4Reconciler(p4, path)
-    reconciler.recursive_scan()
+    reconciler.scan()
     return reconciler
