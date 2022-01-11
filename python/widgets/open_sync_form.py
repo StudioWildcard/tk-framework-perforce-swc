@@ -44,6 +44,9 @@ class SyncForm(QtGui.QWidget):
         self.app = parent_sgtk_app
         self.entities_to_sync = entities_to_sync
 
+        self.scan()
+
+    def scan(self):
         self._asset_item_info = {}
         self._asset_items = {}
         self._sync_items = {}
@@ -65,6 +68,10 @@ class SyncForm(QtGui.QWidget):
             self.prefs.write()
             self.prefs.read()
 
+        # if not self.prefs.data.get('force_sync'):
+        #     self.prefs.data['force_sync'] = False
+        #     self.prefs.write()
+        #     self.prefs.read()
         self.threadpool = QtCore.QThreadPool.globalInstance()
         self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
 
@@ -81,6 +88,10 @@ class SyncForm(QtGui.QWidget):
             self._progress_bar.setRange(0, 1)
             self._progress_bar.setValue(0)
             self.set_progress_message("Please use Perforce Sync with a chosen context. None detected.", percentf=" ")
+
+    def rescan(self):
+        self._asset_tree.clear()
+        self.populate_assets()
 
     @property
     def fw(self):
@@ -111,6 +122,7 @@ class SyncForm(QtGui.QWidget):
 
         self._do = QtGui.QPushButton("Sync")
         self._asset_tree = QtGui.QTreeWidget()
+        self._asset_tree.clear()
         self._progress_bar = QtGui.QProgressBar()
         self._list = QtGui.QListWidget()
         self._line_edit = QtGui.QLineEdit()
@@ -118,6 +130,13 @@ class SyncForm(QtGui.QWidget):
 
         self._step_filter_label = QtGui.QLabel("Show/Sync Steps:")
         self._hide_syncd = QtGui.QCheckBox()
+
+        self._force_sync = QtGui.QCheckBox()
+        self._force_sync.setText("Force Sync")
+
+        self._rescan = QtGui.QPushButton("Rescan")
+
+  
 
 
        
@@ -152,18 +171,25 @@ class SyncForm(QtGui.QWidget):
         self._hide_syncd.stateChanged.connect(self.filter_syncd_items )
         self._hide_syncd.setChecked(self.prefs.data.get('hide_syncd'))
 
+        self._force_sync.stateChanged.connect(self.save_ui_state)
+        self._force_sync.stateChanged.connect(self.rescan)
+        self._force_sync.setChecked(self.prefs.data.get('force_sync'))
 
 
         self._menu_layout.addWidget(self._hide_syncd)
         self._menu_layout.addStretch()
         #self._menu_layout.addWidget(self._step_filter_label)
-        
+
+        self.sync_layout = QtGui.QHBoxLayout()
+        self.sync_layout.addWidget(self._rescan,  3)
+        self.sync_layout.addWidget(self._do,  10)
+        self.sync_layout.addWidget(self._force_sync, 1)
 
         # arrange widgets in layout
         self._main_layout.addLayout(self._menu_layout)
         self._main_layout.addWidget( self._asset_tree)
         self._main_layout.addWidget(self._progress_bar)
-        self._main_layout.addWidget(self._do)
+        self._main_layout.addLayout(self.sync_layout)
 
         # css
         self.setStyleSheet("""
@@ -181,6 +207,7 @@ class SyncForm(QtGui.QWidget):
         self._asset_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self._asset_tree.customContextMenuRequested.connect(self.open_context_menu)
 
+        self._rescan.clicked.connect(self.rescan)
         self.set_ui_interactive(False)
 
 
@@ -257,6 +284,7 @@ class SyncForm(QtGui.QWidget):
             data = self.prefs.read()
             data["hide_syncd"] = self._hide_syncd.isChecked()
             data['window_size'] = [self.width(), self.height()]
+            data["force_sync"] = self._force_sync.isChecked()
 
             # save step filters~
             for f in self.use_filters:
@@ -326,7 +354,6 @@ class SyncForm(QtGui.QWidget):
                     
                         for sync_path, sync_widget in asset_dict['child_widgets'].items():
 
-
                             if sync_path not in self._filtered_away['paths']:
                                 filter_term = asset_dict['child_{}s'.format(f)].get(sync_path)
                                 if filter_term:
@@ -363,7 +390,8 @@ class SyncForm(QtGui.QWidget):
             getattr(self, "_{}_filter".format(f)).setEnabled(state)
 
         self._hide_syncd.setEnabled(state)
-        self._do.setEnabled(state)
+        self._do.setEnabled(state)  
+        self._force_sync.setEnabled(state)
 
     def update_sync_counter(self, asset_name):
         """
@@ -458,6 +486,7 @@ class SyncForm(QtGui.QWidget):
         try:
             asset_name = sync_item_info.get("asset_name")
             item_found = sync_item_info.get("item_found")
+            status = sync_item_info.get('status')
             step = sync_item_info.get('step')
             file_type = sync_item_info.get('type')
 
@@ -486,11 +515,12 @@ class SyncForm(QtGui.QWidget):
 
 
             child_tree_item.setText(self.ASSET_NAME, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
-            child_tree_item.setText(self.STATUS, "Ready")
+            child_tree_item.setText(self.STATUS, status.title())
             child_tree_item.setText(self.DETAIL, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
             child_tree_item.setIcon(self.STATUS, self.make_icon("load"))
             child_tree_item.setData(2, QtCore.Qt.UserRole, asset_file_path)
 
+            child_tree_item.status = status
             
             child_widgets = self._asset_items[asset_name].get("child_widgets")
             child_widgets[ asset_file_path ] = child_tree_item
@@ -548,6 +578,7 @@ class SyncForm(QtGui.QWidget):
 
             self.set_ui_interactive(True)
 
+
             self.filter_items()
             self.filter_syncd_items()
 
@@ -577,6 +608,9 @@ class SyncForm(QtGui.QWidget):
             asset_info_gather_worker = AssetInfoGatherWorker(app=self.app,
                                                              entity=entity_to_sync,
                                                              framework=self.fw)
+
+            if self._force_sync.isChecked():
+                asset_info_gather_worker.force_sync = True
 
             asset_info_gather_worker.info_gathered.connect( self.asset_info_handler )
             asset_info_gather_worker.progress.connect( self.iterate_progress )

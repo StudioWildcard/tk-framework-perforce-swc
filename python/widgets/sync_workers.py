@@ -88,6 +88,7 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         self.app = app
         self.entity = entity
 
+        self.force_sync = False
 
         self._items_to_sync = []
         self._status = None
@@ -153,7 +154,10 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         if self.root_path:
             self.p4 = self.fw.connection.connect()
 
-            sync_response = self.p4.run("sync", ["-n"], "{}#head".format(self.root_path))
+            arguments = ["-n"]
+            if self.force_sync:
+                arguments.append("-f")
+            sync_response = self.p4.run("sync", arguments, "{}#head".format(self.root_path))
 
             if not sync_response:
                 self._status = "Not In Depot"
@@ -210,7 +214,7 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                     
                     published_files = self.app.shotgun.find('PublishedFile', [["sg_p4_depo_path", "in", depot_files]], find_fields )
                     published_file_by_depot_file = {i.get('sg_p4_depo_path'):i for i in published_files}
-                    self.fw.log_info(published_file_by_depot_file)
+                    # self.fw.log_info(published_file_by_depot_file)
                     for item in self._items_to_sync:
 
                         published_file = published_file_by_depot_file.get(item.get('depotFile'))
@@ -240,8 +244,9 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                             "item_found" : item,
                             "step" : step,
                             "type" : file_type,
-                            "ext" : ext.lower()
-                            } 
+                            "ext" : ext.lower(),
+                            "status" : item.get('action')
+                            }
                         )
             else:
                 progress_status_string = " (Encountered error. See details)"
