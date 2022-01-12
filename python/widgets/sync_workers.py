@@ -107,16 +107,24 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         self.status_update = self.signaller.status_update
         self.includes = self.signaller.includes
 
+        self.publish_file = False
+
     @property
     def asset_name(self):
         name = self.asset_item.get('context').entity.get('name')
         if not name:
             name = self.entity.get('code')
+        if self.entity.get('type') in ["PublishFiles"]:
+            sg_ret = self.app.shotgun.find_one("Asset", [["id", "is", self.entity.get('entity').get('id')]], ['code'])
+            name = sg_ret.get('code')
         return name
         
     @property
     def root_path(self):
-        return self.asset_item.get('root_path')
+        rp = self.asset_item.get('root_path')
+        if self.entity.get('type') in ["PublishedFile"]:
+            rp = "B:/" + self.entity.get('path_cache')
+        return rp
     
     @property
     def status(self):
@@ -151,13 +159,14 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         Get a response from perforce about our wish to sync a specific asset root path,
         Contextually use response to drive our status that we show the user. 1
         """
-        if self.root_path:
+        if self.root_path and (self.entity.get('type') not in ['PublishedFile']):
             self.p4 = self.fw.connection.connect()
-
+            
             arguments = ["-n"]
             if self.force_sync:
                 arguments.append("-f")
             sync_response = self.p4.run("sync", arguments, "{}#head".format(self.root_path))
+            
 
             if not sync_response:
                 self._status = "Not In Depot"
@@ -174,7 +183,12 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                 self._status = "{} items to Sync".format(len(self._items_to_sync))
                 self._icon = "load"
                 self._detail = self.root_path
-
+        if self.entity.get('type') in ['PublishedFile']:
+            self._items_to_sync = [{"clientFile" : "B:/" + self.entity.get('path_cache')}]
+            self._status = "Exact Path"
+            self._detail = "Exact path specified: [{}]".format(self.root_path)
+            self._icon = "load"
+            self.fw.log_info(self._items_to_sync)
 
     @QtCore.Slot()
     def run(self):
@@ -207,12 +221,16 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                     find_fields = [
                         "sg_p4_change_number"
                         "code", 
+                        "entity.Asset.code"
                         "sg_p4_depo_path",
                         "task.Task.step.Step.code",
                         "published_file_type.PublishedFileType.code",
                         ]
                     
-                    published_files = self.app.shotgun.find('PublishedFile', [["sg_p4_depo_path", "in", depot_files]], find_fields )
+                    sg_filter = ["sg_p4_depo_path", "in", depot_files]
+                    if self.entity.get('type') in ["PublishedFile"]:
+                        sg_filter = ["id", "in", self.entity.get('id')]
+                    published_files = self.app.shotgun.find('PublishedFile', [sg_filter], find_fields )
                     published_file_by_depot_file = {i.get('sg_p4_depo_path'):i for i in published_files}
                     # self.fw.log_info(published_file_by_depot_file)
                     for item in self._items_to_sync:
@@ -239,18 +257,23 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                             ext = os.path.basename(item.get("clientFile")).split('.')[-1]
                             self.includes.emit(("ext", ext.lower()))
 
+                        status = item.get('action')
+                        if self.entity.get('type') in ["PublishedFile"]:
+                            status = "Exact File"
+
                         self.item_found_to_sync.emit( {
                             "asset_name" : self.asset_name,
                             "item_found" : item,
                             "step" : step,
                             "type" : file_type,
                             "ext" : ext.lower(),
-                            "status" : item.get('action')
+                            "status" : status
                             }
                         )
             else:
                 progress_status_string = " (Encountered error. See details)"
         except Exception as e:
-            self.fw.log_info(str(e))
+            import traceback
+            self.fw.log_info("RUNNNNNN" + traceback.format_exc())
 
         self.progress.emit("Gathering info for {} {}".format(self.asset_name, progress_status_string))
