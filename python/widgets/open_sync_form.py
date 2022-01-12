@@ -33,7 +33,7 @@ class SyncForm(QtGui.QWidget):
         
     progress = 0
     
-    def __init__(self, parent_sgtk_app, entities_to_sync, parent=None):
+    def __init__(self, parent_sgtk_app, entities_to_sync, specific_files,  parent=None):
         """
         Construction of sync UI
         """
@@ -43,7 +43,7 @@ class SyncForm(QtGui.QWidget):
 
         self.app = parent_sgtk_app
         self.entities_to_sync = entities_to_sync
-
+        self.specific_files= specific_files
         self.scan()
 
     def scan(self):
@@ -122,6 +122,7 @@ class SyncForm(QtGui.QWidget):
 
         self._do = QtGui.QPushButton("Sync")
         self._asset_tree = QtGui.QTreeWidget()
+
         self._asset_tree.clear()
         self._progress_bar = QtGui.QProgressBar()
         self._list = QtGui.QListWidget()
@@ -209,6 +210,10 @@ class SyncForm(QtGui.QWidget):
 
         self._rescan.clicked.connect(self.rescan)
         self.set_ui_interactive(False)
+
+        if self.specific_files:
+            self._rescan.setVisible(False)
+            self._force_sync.setVisible(False)
 
 
     def button_menu_factory(self, name= None ):
@@ -535,24 +540,27 @@ class SyncForm(QtGui.QWidget):
         """
         Main handler for asset information. 
         """
-        tree_widget = self.make_top_level_tree_item(asset_name=info_processed_dict.get("asset_name"),
-                                      status= info_processed_dict.get("status"),
-                                      details= info_processed_dict.get("details"),
-                                      icon = info_processed_dict.get("icon"),
-                                      root_path = info_processed_dict.get("root_path")                         
-        )
-        
-        asset_UI_mapping = {}
-        asset_UI_mapping['tree_widget']= tree_widget
-        asset_UI_mapping['asset_info']= info_processed_dict.get("asset_item")
-        asset_UI_mapping['status'] = info_processed_dict.get("status")
-        asset_UI_mapping['child_widgets'] = {}
+        name = info_processed_dict.get("asset_name")
+        if name not in  self._asset_items.keys():
 
-        for f in self.use_filters:
-            asset_UI_mapping['child_{}s'.format(f.lower())] = {}
+            tree_widget = self.make_top_level_tree_item(asset_name=info_processed_dict.get("asset_name"),
+                                        status= info_processed_dict.get("status"),
+                                        details= info_processed_dict.get("details"),
+                                        icon = info_processed_dict.get("icon"),
+                                        root_path = info_processed_dict.get("root_path")                         
+            )
+            
+            asset_UI_mapping = {}
+            asset_UI_mapping['tree_widget']= tree_widget
+            asset_UI_mapping['asset_info']= info_processed_dict.get("asset_item")
+            asset_UI_mapping['status'] = info_processed_dict.get("status")
+            asset_UI_mapping['child_widgets'] = {}
 
-        self._asset_items[info_processed_dict.get("asset_name")] = asset_UI_mapping
-        
+            for f in self.use_filters:
+                asset_UI_mapping['child_{}s'.format(f.lower())] = {}
+
+            self._asset_items[info_processed_dict.get("asset_name")] = asset_UI_mapping
+            
 
     def set_progress_message(self, message=None, percentf=" %p%"):
         """

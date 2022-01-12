@@ -46,7 +46,7 @@ class SyncHandler(object):
         self.p4_server = self._get_p4_server()
 
 
-    def sync_with_dlg(self, app, entities_to_sync):
+    def sync_with_dlg(self, app, entities_to_sync,  specific_files=False):
         """
         Show the sync window for user file syncing
 
@@ -55,6 +55,7 @@ class SyncHandler(object):
 
         self.entities_to_sync = entities_to_sync
         self.app = app
+        self.specific_files = specific_files
 
         try:
             # ensure this always runs on the main thread:
@@ -76,7 +77,7 @@ class SyncHandler(object):
             from ..widgets import SyncForm
 
             result, _ = self._fw.engine.show_modal("Perforce Sync ", self._fw, SyncForm, 
-                                                   self.app, self.entities_to_sync)
+                                                   self.app, self.entities_to_sync, self.specific_files)
 
             if result == QtGui.QDialog.Accepted:
                 pass
@@ -99,7 +100,7 @@ class SyncHandler(object):
         return str(sg_project.get(server_field))
 
 
-def sync_with_dialog(app, entities_to_sync):
+def sync_with_dialog(app, entities_to_sync, specific_files=False):
     """
     Show the Perforce sync dialog
 
@@ -107,4 +108,4 @@ def sync_with_dialog(app, entities_to_sync):
     """
 
     fw = sgtk.platform.current_bundle()
-    return SyncHandler(fw).sync_with_dlg(app, entities_to_sync)
+    return SyncHandler(fw).sync_with_dlg(app, entities_to_sync, specific_files=specific_files)

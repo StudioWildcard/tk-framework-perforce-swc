@@ -21,6 +21,8 @@ class TemplateResolver:
 
         self._entity = None
         self._incoming_entity = entity
+        if entity.get('type') in ["PublishedFile"]:
+            self._entity = entity
 
     @property
     def root_template(self):
@@ -65,9 +67,12 @@ class TemplateResolver:
 
     @property
     def root_path(self):
-        templated_path = self.root_template.apply_fields(self.template_fields,
-                                                         platform= sys.platform)
-        return os.path.join(templated_path, "...")
+        if self._incoming_entity.get('type') in ['PublishedFile']:
+            return self._incoming_entity.get('path_cache')
+        else:
+            templated_path = self.root_template.apply_fields(self.template_fields,
+                                                            platform= sys.platform)
+            return os.path.join(templated_path, "...")
 
     @property
     def entity_info(self):
