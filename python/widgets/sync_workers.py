@@ -115,7 +115,11 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         if self.asset_item.get('context'):
             name = self.asset_item.get('context').entity.get('name')
         if not name:
-            name = self.entity.get('code')
+            if self.entity.get('code'):
+                name = self.entity.get('code')
+            else:
+                name = self.app.shotgun.find_one(self.entity.get('type'), [["id", "is", self.entity.get('id')]], ['code']).get('code')
+
         if self.entity.get('type') in ["PublishFiles"]:
             sg_ret = self.app.shotgun.find_one("Asset", [["id", "is", self.entity.get('entity').get('id')]], ['code'])
             name = sg_ret.get('code')

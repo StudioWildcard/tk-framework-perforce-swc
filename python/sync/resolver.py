@@ -66,8 +66,10 @@ class TemplateResolver:
     def prepare_folders(self):
         try:
             self.app.sgtk.create_filesystem_structure(self.entity['type'], self.entity['id'])
-        except:
+        except Exception as e:
             self.app.log_error(traceback.format_exc())
+            raise Exception(str(e))
+
 
     @property
     def root_path(self):
