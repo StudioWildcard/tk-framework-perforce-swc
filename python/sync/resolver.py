@@ -1,6 +1,7 @@
 import os
 import sys
 import sgtk
+import traceback
 
 name_mapping = {
     "Animation": "CustomEntity05",
@@ -63,7 +64,10 @@ class TemplateResolver:
         return self.app.sgtk.context_from_entity(self.entity['type'],  self.entity['id'])
 
     def prepare_folders(self):
-        self.app.sgtk.create_filesystem_structure(self.entity['type'], self.entity['id'])
+        try:
+            self.app.sgtk.create_filesystem_structure(self.entity['type'], self.entity['id'])
+        except:
+            self.app.log_error(traceback.format_exc())
 
     @property
     def root_path(self):
