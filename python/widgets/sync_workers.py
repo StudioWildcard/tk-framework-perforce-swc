@@ -111,7 +111,9 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
     @property
     def asset_name(self):
-        name = self.asset_item.get('context').entity.get('name')
+        name = None
+        if self.asset_item.get('context'):
+            name = self.asset_item.get('context').entity.get('name')
         if not name:
             name = self.entity.get('code')
         if self.entity.get('type') in ["PublishFiles"]:
@@ -196,23 +198,23 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
         """
         Checks if there are errors in the item, signals that, or if not, gets info regarding what there is to sync. 
         """
-        
-        self.template_resolver = TemplateResolver(app=self.app,
-                                            entity=self.entity )
-
-        self.asset_item = self.template_resolver.entity_info
-        progress_status_string = ""
-
-        self.status_update.emit("Requesting sync information for {}".format(self.asset_name))
-
-        #self.fw.log_info(self.asset_item)
-        self.collect_and_map_info()
-        
-        self.info_gathered.emit(self.info_to_signal)
-        if self.status == 'Syncd':
-            progress_status_string = " (Nothing to sync. Skipping...)"
-        
         try:
+            self.template_resolver = TemplateResolver(app=self.app,
+                                                entity=self.entity )
+
+            self.asset_item = self.template_resolver.entity_info
+            progress_status_string = ""
+
+            self.status_update.emit("Requesting sync information for {}".format(self.asset_name))
+
+            #self.fw.log_info(self.asset_item)
+            self.collect_and_map_info()
+            
+            self.info_gathered.emit(self.info_to_signal)
+            if self.status == 'Syncd':
+                progress_status_string = " (Nothing to sync. Skipping...)"
+            
+        
             if self.status != "Error":
                 
                 if self._items_to_sync:
@@ -272,8 +274,10 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                         )
             else:
                 progress_status_string = " (Encountered error. See details)"
+            self.fw.log_info(progress_status_string)
+            
+
         except Exception as e:
-            import traceback
-            self.fw.log_info("RUNNNNNN" + traceback.format_exc())
+            self.fw.log_error(traceback.format_exc())
 
         self.progress.emit("Gathering info for {} {}".format(self.asset_name, progress_status_string))
