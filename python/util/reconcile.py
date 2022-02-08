@@ -90,7 +90,11 @@ class P4Reconciler:
 
     @property
     def opened_files(self):
-        opened = self.p4.run('opened', os.path.join(self.root_path, "...")) 
+        if os.path.isdir(self.root_path):
+            path = os.path.join(self.root_path, "...")
+        else:
+            path = os.path.join(os.path.dirname(self.root_path), "...")
+        opened = self.p4.run('opened', path) 
         reformatted = []
         for open_item in opened:
             if open_item.get('client') == self.p4.client:
