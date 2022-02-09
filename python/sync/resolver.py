@@ -11,7 +11,9 @@ name_mapping = {
 root_template_mapping = {
     "Asset" : "asset_root",
     "Animation" : "anim_asset_root",
-    "Env Asset" : "env_asset_root"
+    "Env Asset" : "env_asset_root",
+    "Sequence" : "sequence_root",
+    "Shot" : "shot_root"
 }
 
 
@@ -29,7 +31,9 @@ class TemplateResolver:
     def root_template(self):
         mapping = {
             "CustomEntity01" : "env_asset_root",
-            "Asset" : "asset_root"
+            "Asset" : "asset_root",
+            "Sequence" : "sequence_root",
+            "Shot" : "shot_root"
         }
         entity_type = self.entity.get('type')
         if entity_type in mapping.keys():
