@@ -17,6 +17,7 @@ import random
 import time
 import sys
 
+
 from functools import partial
 
 from .sync_workers import SyncWorker, AssetInfoGatherWorker
@@ -45,6 +46,10 @@ class SyncForm(QtGui.QWidget):
         self.entities_to_sync = entities_to_sync
         self.specific_files= specific_files
         self.scan()
+
+    def log_error(self, e):
+        self.fw.log_error(str(e))
+        self.fw.log_error(traceback.format_exc())
 
     def scan(self):
         self._asset_item_info = {}
@@ -275,7 +280,7 @@ class SyncForm(QtGui.QWidget):
             menu.exec_(self._asset_tree.mapToGlobal(point))
 
         except Exception as e:
-            self.fw.log_error(e)
+            self.log_error(e)
 
 
 
@@ -311,7 +316,7 @@ class SyncForm(QtGui.QWidget):
             
                 self.prefs.write(data)
         except Exception as e:
-            self.fw.log_info(str(e))
+            self.log_error(e)
 
     def filter_syncd_items(self):
         """
@@ -337,7 +342,7 @@ class SyncForm(QtGui.QWidget):
             
                 
         except Exception as e:
-            self.fw.log_info(str(e))
+            self.log_error(e)
 
     
     def filter_items(self):
@@ -384,7 +389,7 @@ class SyncForm(QtGui.QWidget):
                     getattr(self, "_{}_filter".format(f)).setIcon(QtGui.QIcon())     
 
         except Exception as e:
-            self.fw.log_info(str(e))
+            self.log_error(e)
 
     def set_ui_interactive(self, state):
         """
@@ -457,7 +462,7 @@ class SyncForm(QtGui.QWidget):
                 actions[filter_value] = action
 
         except Exception as e:
-            self.fw.log_info(str(e))
+            self.log_error(e)
 
     
     def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None, root_path=None):
@@ -534,7 +539,7 @@ class SyncForm(QtGui.QWidget):
             #self.filter_items
             
         except Exception as e:
-            self.fw.log_info(str(e))
+            self.log_error(e)
         
 
     def asset_info_handler(self, info_processed_dict):
@@ -598,36 +603,42 @@ class SyncForm(QtGui.QWidget):
         Utilize a global threadpool to process workers to ask P4 server for what 
         there is to sync for these. 
         """
-        
-        self.asset_item_registry = {}  
+        try:
+            self.asset_item_registry = {}  
 
-        self.sync_items = {}
-        self.sync_order = []
-        self.progress = 0
+            self.sync_items = {}
+            self.sync_order = []
+            self.progress = 0
 
-        self.progress_maximum = len(self.entities_to_sync)
-        self._progress_bar.setRange(0, self.progress_maximum)
-        self._progress_bar.setValue(0)
-        self.set_progress_message("Requesting asset information for SG selection...")
+            self.progress_maximum = len(self.entities_to_sync)
+            self._progress_bar.setRange(0, self.progress_maximum)
+            self._progress_bar.setValue(0)
+            self.set_progress_message("Requesting asset information for SG selection...")
 
-        # self.fw.log_info(len(self.entities_to_sync))
-        # iterate all parent assets
-        for entity_to_sync in self.entities_to_sync:
+            # self.fw.log_info(len(self.entities_to_sync))
+            # iterate all parent assets
+            for entity_to_sync in self.entities_to_sync:
 
-            asset_info_gather_worker = AssetInfoGatherWorker(app=self.app,
-                                                             entity=entity_to_sync,
-                                                             framework=self.fw)
+                asset_info_gather_worker = AssetInfoGatherWorker(app=self.app,
+                                                                entity=entity_to_sync,
+                                                                framework=self.fw)
 
-            if self._force_sync.isChecked():
-                asset_info_gather_worker.force_sync = True
+                if self._force_sync.isChecked():
+                    asset_info_gather_worker.force_sync = True
 
-            asset_info_gather_worker.info_gathered.connect( self.asset_info_handler )
-            asset_info_gather_worker.progress.connect( self.iterate_progress )
-            asset_info_gather_worker.item_found_to_sync.connect(self.make_sync_tree_item)
-            asset_info_gather_worker.status_update.connect(self.set_progress_message)
-            asset_info_gather_worker.includes.connect(self.update_available_filters)
+                asset_info_gather_worker.info_gathered.connect( self.asset_info_handler )
+                asset_info_gather_worker.progress.connect( self.iterate_progress )
+                asset_info_gather_worker.item_found_to_sync.connect(self.make_sync_tree_item)
+                asset_info_gather_worker.status_update.connect(self.set_progress_message)
+                asset_info_gather_worker.includes.connect(self.update_available_filters)
 
-            self.threadpool.start(asset_info_gather_worker)
+                if self.child_asset_ids:
+                    if entity_to_sync.get('id') in self.child_asset_ids:
+                        asset_info_gather_worker.child = True
+
+                self.threadpool.start(asset_info_gather_worker)
+        except Exception as e:
+            self.log_error(e)
 
 
     def make_icon(self, name):
@@ -706,40 +717,42 @@ class SyncForm(QtGui.QWidget):
         Iterate through assets and their sync items to start workers for all paths that require syncs. 
         Utilize a global threadpool to process
         """
+        try:
+            self.set_ui_interactive(False)
 
-        self.set_ui_interactive(False)
+            workers = []
+            for asset_name, asset_dict in self._asset_items.items():
+                for sync_path, sync_widget in asset_dict['child_widgets'].items():
+                    if not sync_widget.isHidden():
+                        sync_worker = SyncWorker()
+                        sync_worker.path_to_sync = sync_path
+                        sync_worker.asset_name = asset_name
 
-        workers = []
-        for asset_name, asset_dict in self._asset_items.items():
-            for sync_path, sync_widget in asset_dict['child_widgets'].items():
-                if not sync_widget.isHidden():
-                    sync_worker = SyncWorker()
-                    sync_worker.path_to_sync = sync_path
-                    sync_worker.asset_name = asset_name
+                        sync_worker.fw = self.fw
+                        
+                        sync_worker.started.connect(self.sync_in_progress)
+                        # worker.finished.connect(self.sync_completed)
+                        sync_worker.progress.connect(self.item_syncd)
 
-                    sync_worker.fw = self.fw
+                        workers.append(sync_worker)
                     
-                    sync_worker.started.connect(self.sync_in_progress)
-                    # worker.finished.connect(self.sync_completed)
-                    sync_worker.progress.connect(self.item_syncd)
+            self.progress = 0
 
-                    workers.append(sync_worker)
-                
-        self.progress = 0
+            self.progress_maximum = len(workers)
+            self._progress_bar.setRange(0, self.progress_maximum)
+            self._progress_bar.setValue(0)
+            self._progress_bar.setVisible(True)
+            self._progress_bar.setFormat("%p%")
 
-        self.progress_maximum = len(workers)
-        self._progress_bar.setRange(0, self.progress_maximum)
-        self._progress_bar.setValue(0)
-        self._progress_bar.setVisible(True)
-        self._progress_bar.setFormat("%p%")
+            # make threadpool to take all workers and multithread their execution
+            self.threadpool = QtCore.QThreadPool.globalInstance()
+            self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
 
-        # make threadpool to take all workers and multithread their execution
-        self.threadpool = QtCore.QThreadPool.globalInstance()
-        self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
+            self.fw.log_debug("Starting Threaded P4 Sync...")
 
-        self.fw.log_debug("Starting Threaded P4 Sync...")
+            # setup workers for multiprocessing
 
-        # setup workers for multiprocessing
-
-        for sync_worker in workers:
-            self.threadpool.start(sync_worker)
+            for sync_worker in workers:
+                self.threadpool.start(sync_worker)
+        except Exception as e:
+            self.log_error(e)
