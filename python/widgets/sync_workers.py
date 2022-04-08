@@ -36,6 +36,8 @@ class SyncWorker(QtCore.QRunnable):
     path_to_sync = None
     asset_name = None
 
+
+
     def __init__(self):
         """
         Handles syncing specific file from perforce depot to local workspace on disk
@@ -48,6 +50,10 @@ class SyncWorker(QtCore.QRunnable):
         self.started = self.signaller.started
         self.finished = self.signaller.finished
         self.progress = self.signaller.progress
+
+    def log_error(self, e):
+        self.fw.log_error(str(e))
+        self.fw.log_error(traceback.format_exc())
 
     @QtCore.Slot()
     def run(self):
@@ -109,26 +115,34 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
 
         self.publish_file = False
 
+    def log_error(self, e):
+        self.fw.log_error(str(e))
+        self.fw.log_error(traceback.format_exc())
+
     @property
     def asset_name(self):
-        name = None
-        if self.asset_item.get('context'):
-            name = self.asset_item.get('context').entity.get('name')
-        if not name:
-            if self.entity.get('code'):
-                name = self.entity.get('code')
-            else:
-                name = self.app.shotgun.find_one(self.entity.get('type'), [["id", "is", self.entity.get('id')]], ['code']).get('code')
+        try:
+            name = None
+            if self.asset_item.get('context'):
+                name = self.asset_item.get('context').entity.get('name')
+            if not name:
+                if self.entity.get('code'):
+                    name = self.entity.get('code')
+                else:
+                    name = self.app.shotgun.find_one(self.entity.get('type'), [["id", "is", self.entity.get('id')]], ['code']).get('code')
 
-        if self.entity.get('type') in ["PublishFiles"]:
-            sg_ret = self.app.shotgun.find_one("Asset", [["id", "is", self.entity.get('entity').get('id')]], ['code'])
-            name = sg_ret.get('code')
-        return name
+            if self.entity.get('type') in ["PublishFiles"]:
+                sg_ret = self.app.shotgun.find_one("Asset", [["id", "is", self.entity.get('entity').get('id')]], ['code'])
+                name = sg_ret.get('code')
+            return name
+        except Exception as e:
+            self.log_error(e)
         
     @property
     def root_path(self):
         rp = self.asset_item.get('root_path')
         if self.entity.get('type') in ["PublishedFile"]:
+            # TODO: this needs to become dynamic
             rp = "B:/" + self.entity.get('path_cache')
         return rp
     
@@ -282,6 +296,6 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
             
 
         except Exception as e:
-            self.fw.log_error(traceback.format_exc())
+            self.log_error(e)
 
         self.progress.emit("Gathering info for {} {}".format(self.asset_name, progress_status_string))
