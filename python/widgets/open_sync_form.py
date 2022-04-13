@@ -301,10 +301,11 @@ class SyncForm(QtGui.QWidget):
                 if data.get(filter_name):
                     filter_data = data.get(filter_name)
                 # overwrite it with  our scan of presently checked items
-                actions = getattr(self, "_{}_actions".format(f))
-                if actions:
-                    for k,v in actions.items():
-                        filter_data[k] = v.isChecked()
+                if hasattr(self, "_{}_actions".format(f)):
+                    actions = getattr(self, "_{}_actions".format(f))
+                    if actions:
+                        for k,v in actions.items():
+                            filter_data[k] = v.isChecked()
 
                 data[filter_name] = filter_data
             
