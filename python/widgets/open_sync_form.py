@@ -632,9 +632,10 @@ class SyncForm(QtGui.QWidget):
                 asset_info_gather_worker.status_update.connect(self.set_progress_message)
                 asset_info_gather_worker.includes.connect(self.update_available_filters)
 
-                if self.child_asset_ids:
-                    if entity_to_sync.get('id') in self.child_asset_ids:
-                        asset_info_gather_worker.child = True
+                # if hasattr(self, 'child_asset_ids'):
+                #     if self.child_asset_ids:
+                #         if entity_to_sync.get('id') in self.child_asset_ids:
+                #             asset_info_gather_worker.child = True
 
                 self.threadpool.start(asset_info_gather_worker)
         except Exception as e:
