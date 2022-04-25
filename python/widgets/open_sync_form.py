@@ -636,8 +636,8 @@ class SyncForm(QtGui.QWidget):
                 #     if self.child_asset_ids:
                 #         if entity_to_sync.get('id') in self.child_asset_ids:
                 #             asset_info_gather_worker.child = True
-
-                self.threadpool.start(asset_info_gather_worker)
+                asset_info_gather_worker.run()
+                # self.threadpool.start(asset_info_gather_worker)
         except Exception as e:
             self.log_error(e)
 
@@ -746,14 +746,14 @@ class SyncForm(QtGui.QWidget):
             self._progress_bar.setFormat("%p%")
 
             # make threadpool to take all workers and multithread their execution
-            self.threadpool = QtCore.QThreadPool.globalInstance()
-            self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
+            # self.threadpool = QtCore.QThreadPool.globalInstance()
+            # self.threadpool.setMaxThreadCount(min(24, self.threadpool.maxThreadCount()))
 
-            self.fw.log_debug("Starting Threaded P4 Sync...")
+            # self.fw.log_debug("Starting Threaded P4 Sync...")
 
             # setup workers for multiprocessing
 
             for sync_worker in workers:
-                self.threadpool.start(sync_worker)
+                sync_worker.run()
         except Exception as e:
             self.log_error(e)
