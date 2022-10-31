@@ -16,16 +16,22 @@ import os
 import socket
 import re
 import threading
+import subprocess
+import socket
+import collections
+import time
 
 import sgtk
 from sgtk import TankError
-from sgtk.platform.qt import QtGui
+from sgtk.platform.qt import QtGui, QtCore
+from tank.platform.qt5 import QtWidgets
 
 from P4 import P4, P4Exception
 
 from .user_settings import UserSettings
 from ..util.progress import ProgressHandler
 
+logger = sgtk.platform.get_logger(__name__)
 
 class SgtkP4Error(TankError):
     """
@@ -300,14 +306,23 @@ class ConnectionHandler(object):
         # that are accessible from any machine. Note: Host is always set, but can
         # be an empty string. In that case, we will consider the host for that workspace
         # to be the current host.
-        filtered_workspaces = [ws for ws in all_workspaces if (ws.get("Host") or host) == host]
+
+        self._selected_workspaces = [ws for ws in all_workspaces if (ws.get("Host") or host) == host]
+
+        workspace_name = self._sgtk_workspace()
+
+        self._filtered_workspaces = [ws for ws in all_workspaces if ws.get("client") == workspace_name]
+        self.log('Filtered workspaces: {}'.format(self._filtered_workspaces))
 
         # show the password entry dialog:
         try:
             from ..widgets import SelectWorkspaceForm
+
             res, widget = self._fw.engine.show_modal("Perforce Workspace", self._fw, SelectWorkspaceForm,
                                                      self._p4.port, user,
-                                                     filtered_workspaces, initial_ws, parent_widget)
+                                                     self._filtered_workspaces, workspace_name, parent_widget)
+
+
             if res == QtGui.QDialog.Accepted:
                 return widget.workspace_name
 
@@ -332,6 +347,7 @@ class ConnectionHandler(object):
         :returns:           A new connected P4 instance if successful or None if the user cancels.
         :raises:            TankError if connecting failed for some reason other than the user cancelling.
         """
+        self.log('Connecting to the server ...')
         server = self.p4_server
         if not user:
             sg_user = sgtk.util.get_current_user(self._fw.sgtk)
@@ -346,12 +362,14 @@ class ConnectionHandler(object):
         _g_connection_lock.acquire()
         try:
             # first, attempt to connect to the server:
+            self.log('first, attempt to connect to the server ...')
             try:
                 self.connect_to_server()
             except SgtkP4TCPConnectionError as e:
                 raise 
 
             # then ensure that the connection is trusted:
+            self.log('then ensure that the connection is trusted ...')
             try:
                 is_trusted, show_details = self._ensure_connection_is_trusted(allow_ui)
                 if show_details:
@@ -365,6 +383,7 @@ class ConnectionHandler(object):
                 raise TankError("Perforce: Connection to server '%s' is not trusted: %s" % (server, e))
 
             # log-in user:
+            self.log('then  log-in user ...')
             try:
                 self._p4.user = user
 
@@ -385,11 +404,20 @@ class ConnectionHandler(object):
             except SgtkP4Error as e:
                 raise TankError("Perforce: Failed to login user '%s' - %s" % (user, e))
 
+
+
             # finally, validate the workspace:
+            self.log('finally, validate the workspace ...')
             workspace = workspace if workspace is not None else self._sgtk_workspace()
             if workspace:
+                """
+                # Todo: remove this
+                workspace['Root'] = "T:\\"
+                self.log('workspace to connect : {}'.format(workspace))
+                """
                 try:
                     self._validate_workspace(workspace, user)
+                    #self.log('workspace after validation : {}'.format(workspace))
                     self._p4.client = str(workspace)
                 except SgtkP4Error as e:
                     raise TankError("Perforce: Workspace '%s' is not valid! - %s" % (workspace, e))
@@ -563,7 +591,7 @@ class ConnectionHandler(object):
 
     def _on_open_connection(self, widget):
         """
-        Called when the user clicks Connected on the connection dialog.
+        Called when the user clicks Connect on the connection dialog.
 
         :param widget: The OpenConnectionForm object.
         """
@@ -577,6 +605,8 @@ class ConnectionHandler(object):
         try:
             self._validate_workspace(widget.workspace, widget.user)
             self._p4.client = str(widget.workspace)
+            self.log('Connecting using workspace: {} ...'.format(self._p4.client))
+            
         except TankError as e:
             # likely that the user isn't valid!
             QtGui.QMessageBox.information(widget, "Invalid Perforce Workspace!",
@@ -584,7 +614,30 @@ class ConnectionHandler(object):
                                            ":\n\n    '%s'\n\n%s" % (widget.workspace, widget.user, widget.server, e)))
             return
 
+
+        """
+        #try:
+        display_msg = "Are you sure that you would like to connect using workspace {}?".format(self._p4.client)
+        confirmation_box = QtWidgets.QMessageBox()
+        confirmation_box.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        confirmation_box.setText(display_msg)
+        confirmation_box.setWindowTitle("Connection Confirmation")
+        confirmation_box.setStandardButtons(
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Confirm")
+        no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
+        # save_btn = confirmation_box.button(QtWidgets.QMessageBox.Save).setText("")
+        result = confirmation_box.exec_()
+        if result == QtWidgets.QMessageBox.Yes:
+            widget.close()
+        elif result == QtWidgets.QMessageBox.No:
+            pass
+        #except:
+        #    pass
+        """
+
         # success so lets close the widget!
+        self.log('Connected! ')
         widget.close()
 
     def _do_connect_and_login(self, widget):
@@ -647,9 +700,11 @@ class ConnectionHandler(object):
         hostname = socket.gethostname()
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
         workspaces = [c["client"] for c in p4.run("clients")]
-
+        #self.log('_sgtk_workspace ... ')
+        #self.log('workspace_name ... {}'.format(workspace_name))
+        #self.log('workspaces ... {}'.format(workspaces))
         if workspace_name in workspaces:
-            self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
+            #self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
             if not template_name in workspaces:
@@ -666,6 +721,56 @@ class ConnectionHandler(object):
         p4.save_client(client)
 
         return workspace_name
+
+    def _create_workspace(self, drive):
+        """
+        Create a new workspace based on a drive
+        """
+        p4 = self.connection
+        project_name = self._fw.sgtk.pipeline_configuration._project_name
+        template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
+
+        root_path = os.path.abspath(
+            os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
+        #self.log('project_name: {}'.format(project_name))
+        #self.log('root_path: {}'.format(root_path))
+
+        hostname = socket.gethostname()
+        drive_letter = self._get_drive_letter(drive)
+        workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
+        workspace_drive_name = "{}_{}".format(workspace_name, drive_letter)
+
+        for workspace in self._selected_workspaces:
+            #self.log("workspace found: {}".format(workspace))
+            if (workspace["client"] == workspace_name or workspace["client"] == workspace_drive_name) and workspace["Root"] == drive:
+                msg = "Existing workspace found: {}".format(workspace_name)
+                self._fw.log_debug(msg)
+                #self.log(msg)
+                return workspace_name
+        else:
+            workspaces = [c["client"] for c in p4.run("clients")]
+            if not template_name in workspaces:
+                msg = "Template workspace '{}' not found! Contact your admin.".format(template_name)
+                self._fw.log_error(msg)
+                #self.log(msg)
+                return None
+
+
+        # create a new client workspace spec from the project template
+        client = p4.fetch_client("-t", template_name, workspace_drive_name)
+        # set the root to be one-level above the sgtk project root and give a desc
+        client._root = drive
+        client._description = "Sgtk-generated workspace based on {}".format(template_name)
+        # save the client workspace to p4, so we can access it
+        p4.save_client(client)
+
+        return workspace_drive_name
+
+    def _get_drive_letter(self, drive):
+        drive_letter = ""
+        if len(drive) >= 1:
+            drive_letter = drive[0]
+        return drive_letter
 
     def _get_current_workspace(self):
         """
@@ -710,6 +815,7 @@ class ConnectionHandler(object):
         """
         try:
             workspaces = self._p4.run_clients("-e", str(workspace))
+            self.log('run_clientsworkspaces: {}'.format(workspaces))
         except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
 
@@ -778,6 +884,14 @@ class ConnectionHandler(object):
             return None
 
         return str(sg_project.get(server_field))
+
+    def log(self, msg, error=0):
+        if logger:
+            if error:
+                logger.warn(msg)
+            else:
+                logger.info(msg)
+        print(msg)
 
 
 def connect(allow_ui=True, user=None, password=None, workspace=None, progress=None):

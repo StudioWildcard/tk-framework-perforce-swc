@@ -10,6 +10,14 @@
 
 import sgtk
 from sgtk.platform.qt import QtCore, QtGui
+from tank.platform.qt5 import QtWidgets
+import subprocess
+import os
+import collections
+import glob
+
+logger = sgtk.platform.get_logger(__name__)
+
 from .ui.select_workspace_form import Ui_SelectWorkspaceForm
     
 class SelectWorkspaceForm(QtGui.QWidget):
@@ -29,24 +37,38 @@ class SelectWorkspaceForm(QtGui.QWidget):
         Construction
         """
         QtGui.QWidget.__init__(self, parent)
-        
+
+        self.app = QtWidgets.QApplication.instance()
+        self.app.processEvents()
         # setup UI:
         self.__ui = Ui_SelectWorkspaceForm()
         self.__ui.setupUi(self)
         
-        self.__ui.details_label.setText("Please choose a Perforce Workspace for user '%s' on server '%s'" 
+        self.__ui.details_label.setText("Perforce Workspace for user '%s' on server '%s'"
                                         % (user, server))
         
         self.__ui.cancel_btn.clicked.connect(self._on_cancel)
         self.__ui.ok_btn.clicked.connect(self._on_ok)
-        
+
+        self.__ui.folderBtn.clicked.connect(self._selectDirDialog)
         self.__ui.workspace_list.clicked.connect(self._on_workspace_clicked)
         self.__ui.workspace_list.doubleClicked.connect(self._on_workspace_doubleclicked)
         self.__ui.workspace_list.currentCellChanged.connect(self._on_workspace_changed)
         self.__ui.workspace_list.installEventFilter(self)
-        
+
+        self._fw = sgtk.platform.current_bundle()
+        self._root_path = os.path.abspath(
+            os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
+
+        self._workspace_details = workspace_details
+        self._current_workspace = current_workspace
+
+        self._mapping_status = self._get_drive_status()
+        self._startup_folder = "{}/Microsoft/Windows/Start Menu/Programs/Startup".format(os.getenv('APPDATA'))
         # init list:
-        self._initialize(workspace_details, current_workspace)
+
+        # self._initialize(workspace_details, current_workspace)
+
         
         # update UI:
         self._update_ui()
@@ -78,7 +100,33 @@ class SelectWorkspaceForm(QtGui.QWidget):
                 
         # let default handler handle the event:
         return QtCore.QObject.eventFilter(self, q_object, event)
-    
+
+    def _selectDirDialog(self):
+
+        self._mapping_status = self._get_drive_status()
+        selectedDir = QtGui.QFileDialog.getExistingDirectory(
+            self,
+            "Select an empty folder to create project drive mapping",
+            self._root_path,
+            QtGui.QFileDialog.ShowDirsOnly
+            )
+        self.__ui.folderInput.setText(selectedDir)
+
+        if os.path.isdir(selectedDir):
+            if not os.listdir(selectedDir):
+                self.log_status("Selected folder {} is empty".format(selectedDir))
+                if self._root_path and len(self._root_path) >= 2:
+                    drive = self._root_path[0:2]
+                    drive = drive.lower()
+                    self._create_drive_mapping(drive, selectedDir)
+                else:
+                    self.log_status("Error with project root path: {}".format(self._root_path))
+            else:
+                self.log_status("\nSelected folder {} is not empty, please select another folder".format(selectedDir))
+        else:
+            self.log_status("Selected folder {} does not exist, please select another folder".format(selectedDir))
+        return selectedDir
+
     def _on_cancel(self):
         """
         """
@@ -102,36 +150,58 @@ class SelectWorkspaceForm(QtGui.QWidget):
         """
         self._update_ui()
     
-    def _on_workspace_changed(self, row, column, prev_row, prev_column):
+    def _on_workspace_changed(self):
         """
         """
         self._update_ui()
         
     def _update_ui(self):
         """
+        Update UI
         """
         something_selected = bool(self.__ui.workspace_list.selectedItems())
         self.__ui.ok_btn.setEnabled(something_selected)
-        
-    def _initialize(self, workspace_details, current_workspace):
+        """
+        workspace_name = ""
+        for r in range(self.__ui.workspace_list.rowCount()):
+            for c in range(self.__ui.workspace_list.columnCount()-1, -1, -1):
+                widget = self.__ui.workspace_list.cellWidget(r, c)
+                if c == 2 and isinstance(widget, QtGui.QComboBox):
+                    drive_value = widget.currentText()
+                    workspace_name = self.drive_mapping[drive_value]
+                if c == 0:
+                    item = self.__ui.workspace_list.item(r, c)
+                    item.setText(workspace_name)
+        self.app.processEvents()
+        """
+
+    def _display_workspace(self):
         """
         """
         column_labels = ["Workspace", "Description", "Location"]
         self.__ui.workspace_list.setColumnCount(len(column_labels))
         self.__ui.workspace_list.setHorizontalHeaderLabels(column_labels)
         
-        self.__ui.workspace_list.setRowCount(len(workspace_details))
+        self.__ui.workspace_list.setRowCount(len(self._workspace_details))
         
         selected_index = -1
-        for wsi, ws in enumerate(workspace_details):
+        for wsi, ws in enumerate(self._workspace_details):
             ws_name = ws.get("client", "").strip()
-            if ws_name == current_workspace:
+            if ws_name == self._current_workspace:
                 selected_index = wsi
-            
+
             self.__ui.workspace_list.setItem(wsi, 0, QtGui.QTableWidgetItem(ws_name))
             self.__ui.workspace_list.setItem(wsi, 1, QtGui.QTableWidgetItem(ws.get("Description", "").strip()))
             self.__ui.workspace_list.setItem(wsi, 2, QtGui.QTableWidgetItem(ws.get("Root", "").strip()))
-            
+            """
+            self.combo_box = QtGui.QComboBox()
+            root_drive = ws.get("Root", "").strip()
+            self.combo_box.addItem(root_drive)
+            for drive in self.drive_mapping.keys():
+                if drive.strip() != root_drive:
+                    self.combo_box.addItem(drive.strip())
+            self.__ui.workspace_list.setCellWidget(wsi, 2, self.combo_box)
+            """
         if selected_index >= 0:
             self.__ui.workspace_list.selectRow(selected_index)
         else:
@@ -139,6 +209,207 @@ class SelectWorkspaceForm(QtGui.QWidget):
             
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
+
+    def _get_drive_status(self):
+        # check the project drive
+        self.log_status('Checking project drive mapping ...')
+        result, drive, path = self._check_project_drive()
+        if result:
+            msg = '\nDrive {} is mapped'.format(drive)
+            self.log_status(msg)
+            self.__ui.folderInput.setText(path)
+            self.__ui.folderBtn.setText("Change mapping folder")
+            self._set_workspace()
+            return True
+        else:
+            msg = '\nSelect a folder to create project drive mapping '
+            self.log_status(msg)
+            return False
+        return False
+
+
+    def _check_project_drive(self):
+        """
+        Check if project drive mapping exists
+        """
+        self.log_status('root_path: {}'.format(self._root_path))
+
+        available_drives = self.get_available_drives()
+        for drive, path in available_drives.items():
+            drive = drive.strip()
+            if self._root_path == drive:
+                self.log_status('Drive exists: {}'.format(drive))
+                return True, drive, path
+        self.log_status("Drive does not exist")
+        return False, None, None
+
+    def _create_drive_mapping(self, drive, folder):
+        """
+        Create a drive mapping on local machine using 'subst' command
+        """
+
+        # Remove drive mapping if necessary
+        self.log_status("\nRemoving existing mapping of drive {} if needed ...".format(drive))
+        #if not self._mapping_status:
+        try:
+            map_cmd = "subst {} /d".format(drive, folder)
+            pipe = subprocess.Popen(map_cmd, shell=True,
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            output, error = pipe.communicate()
+            result = pipe.returncode
+            if result == 0:
+                self.log_status("\nMapping of drive {} is removed".format(drive))
+
+        except:
+            pass
+
+        try:
+            self.log_status("\nCleaning all files at startup folder from occurrences of old mapped drive {} ...".format(drive))
+            self._clean_startup_files(drive)
+        except:
+            pass
+
+        self.log_status("\nMapping drive {} to folder {} ...".format(drive, folder))
+        map_cmd = "subst {} {}".format(drive, folder)
+        pipe = subprocess.Popen(map_cmd, shell=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = pipe.communicate()
+        result = pipe.returncode
+        if result == 0:
+            self.log_status("Successfully mapped drive {} to folder {}".format(drive, folder))
+            self.__ui.folderInput.setText(folder)
+            self.__ui.folderBtn.setText("Change mapping folder")
+            self.log_status("Displaying workspace {} ...".format(self._current_workspace))
+            self._create_startup_file(drive, folder)
+            self._set_workspace()
+
+    def _set_workspace(self):
+        self._display_workspace()
+        self.log_status("\nSelect the workspace {} and click OK to confirm".format(self._current_workspace))
+        self.log_status("Or double click on the workspace {}".format(self._current_workspace))
+
+    def _clean_startup_files(self, drive):
+        """
+        Clean all files at startup folder from occurrences of old mapped drive
+        """
+        """
+        for path, subdirs, files in os.walk(self._startup_folder):
+            for name in files:
+                file_name = (os.path.join(path, name))
+                self.log_status("Cleaning file {}".format(file_name))
+                os.chmod(file_name, 0o0777)
+                self._clean_file (file_name, drive)
+        """
+        #path = "{}/**".format(self._startup_folder)
+        #for path in glob.glob(path, recursive=True):
+        file_match = '{}'.format(self._startup_folder)
+        file_list = glob.glob('%s/*.bat' % file_match)
+        for path in file_list:
+            self.log_status("Cleaning file {}".format(path))
+            os.chmod(path, 0o0777)
+            self._clean_file(path, drive)
+
+    def _clean_file (self, file_name, drive):
+        """
+        Clean one file at startup folder from occurrences of old mapped drive
+        """
+        with open(file_name, "r") as f:
+            lines = f.readlines()
+        with open(file_name, "w") as f:
+            for line in lines:
+                if drive not in line.strip("\n"):
+                    f.write(line)
+
+    def _create_startup_file(self, drive, folder):
+        """
+        Create a .bat file to do the drive mapping at startup
+        """
+        file_name = "SGDriveMapping.bat"
+        file_path = "{}/{}".format(self._startup_folder,file_name)
+
+        drive = drive.lower()
+        f = open(file_path, "w")
+        f.write("subst {} {}\n".format(drive, folder))
+        f.close()
+
+        os.chmod(file_path, 509)
+        if os.path.exists(file_path):
+            self.log_status("\nCreated {} file at startup folder {}".format(file_name, self._startup_folder))
+            return file_path
+        return None
+
+
+    def get_available_drives(self):
+        """
+        Get user workspaces on local machine using 'subst' command
+        """
+        output_path = self.get_output_path()
+        cmd = "subst > {}".format(output_path)
+        result = subprocess.Popen(cmd, shell=True,
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        output, error = result.communicate()
+
+        available_drives = collections.OrderedDict()
+        # try:
+        with open(output_path, 'r') as in_file:
+            lines = in_file.readlines()
+            for line in lines:
+                line = line.rstrip()
+                line = line.split(": => ")
+                if len(line) == 2:
+                    root, path = line[0], line[1]
+                    available_drives[root] = path
+
+        in_file.close()
+
+        # except:
+        #    self.log('Unable to read mapping file: {}'.format(output_path))
+        #    pass
+        # self.log('workspaces_list: {}'.format(workspaces_list))
+        return available_drives
+
+    def get_output_path(self):
+        output_folder = "C:/temp"
+        self.create_folder(output_folder)
+        output_path = "{}/mapping_output.txt".format(output_folder)
+        return output_path
+
+    def create_folder(self, folder_name):
+        """
+        create output directory if it doesn't exit
+        :param folder_name:
+        :return:
+        """
+        if not os.path.exists(folder_name):
+            # handle race condition (multiple tasks on same machine) of two tasks trying create at same time
+            try:
+                os.makedirs(folder_name)
+            except Exception as ex:
+                if 'file already exists' in str(ex):
+                    # just continue as folder already created by other concurrent task on same machine
+                    pass
+                else:
+                    # another error that likely will need to be investigated
+                    raise
+
+    def log(self, msg, error=0):
+        if logger:
+            if error:
+                logger.warn(msg)
+            else:
+                logger.info(msg)
+        print(msg)
+
+    def add_status(self, status):
+        self.__ui.status_dialog.append(status)
+        self.app.processEvents()
+
+    def log_status(self, status):
+        self.add_status(status)
+        self.log(status)
+
+
+
     
     
     
