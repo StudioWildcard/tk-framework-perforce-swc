@@ -111,21 +111,42 @@ class SelectWorkspaceForm(QtGui.QWidget):
             QtGui.QFileDialog.ShowDirsOnly
             )
         self.__ui.folderInput.setText(selectedDir)
+        drive = self._root_path[0:2]
+        drive = drive.lower()
 
         if os.path.isdir(selectedDir):
+
             if not os.listdir(selectedDir):
                 self.log_status("Selected folder {} is empty".format(selectedDir))
                 if self._root_path and len(self._root_path) >= 2:
-                    drive = self._root_path[0:2]
-                    drive = drive.lower()
                     self._create_drive_mapping(drive, selectedDir)
                 else:
                     self.log_status("Error with project root path: {}".format(self._root_path))
             else:
-                self.log_status("\nSelected folder {} is not empty, please select another folder".format(selectedDir))
+                self.log_status("\nSelected folder {} is not empty".format(selectedDir))
+                result = self._warning_dialog()
+                if result:
+                    self._create_drive_mapping(drive, selectedDir)
         else:
             self.log_status("Selected folder {} does not exist, please select another folder".format(selectedDir))
         return selectedDir
+
+    def _warning_dialog(self):
+        display_msg = "Warning: The selected folder is not empty. This could create problems syncing files from Perforce."
+        confirmation_box = QtWidgets.QMessageBox()
+        confirmation_box.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
+        confirmation_box.setText(display_msg)
+        confirmation_box.setWindowTitle("Warning!")
+        confirmation_box.setStandardButtons(
+            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
+        yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Proceed Anyway")
+        no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
+        # save_btn = confirmation_box.button(QtWidgets.QMessageBox.Save).setText("")
+        result = confirmation_box.exec_()
+        if result == QtWidgets.QMessageBox.Yes:
+            return True
+        elif result == QtWidgets.QMessageBox.No:
+            return False
 
     def _on_cancel(self):
         """
