@@ -322,7 +322,6 @@ class ConnectionHandler(object):
                                                      self._p4.port, user,
                                                      self._filtered_workspaces, workspace_name, parent_widget)
 
-
             if res == QtGui.QDialog.Accepted:
                 return widget.workspace_name
 
@@ -403,8 +402,6 @@ class ConnectionHandler(object):
                         return None
             except SgtkP4Error as e:
                 raise TankError("Perforce: Failed to login user '%s' - %s" % (user, e))
-
-
 
             # finally, validate the workspace:
             self.log('finally, validate the workspace ...')
@@ -614,28 +611,6 @@ class ConnectionHandler(object):
                                            ":\n\n    '%s'\n\n%s" % (widget.workspace, widget.user, widget.server, e)))
             return
 
-
-        """
-        #try:
-        display_msg = "Are you sure that you would like to connect using workspace {}?".format(self._p4.client)
-        confirmation_box = QtWidgets.QMessageBox()
-        confirmation_box.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
-        confirmation_box.setText(display_msg)
-        confirmation_box.setWindowTitle("Connection Confirmation")
-        confirmation_box.setStandardButtons(
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Confirm")
-        no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
-        # save_btn = confirmation_box.button(QtWidgets.QMessageBox.Save).setText("")
-        result = confirmation_box.exec_()
-        if result == QtWidgets.QMessageBox.Yes:
-            widget.close()
-        elif result == QtWidgets.QMessageBox.No:
-            pass
-        #except:
-        #    pass
-        """
-
         # success so lets close the widget!
         self.log('Connected! ')
         widget.close()
@@ -732,8 +707,6 @@ class ConnectionHandler(object):
 
         root_path = os.path.abspath(
             os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
-        #self.log('project_name: {}'.format(project_name))
-        #self.log('root_path: {}'.format(root_path))
 
         hostname = socket.gethostname()
         drive_letter = self._get_drive_letter(drive)
@@ -754,7 +727,6 @@ class ConnectionHandler(object):
                 self._fw.log_error(msg)
                 #self.log(msg)
                 return None
-
 
         # create a new client workspace spec from the project template
         client = p4.fetch_client("-t", template_name, workspace_drive_name)

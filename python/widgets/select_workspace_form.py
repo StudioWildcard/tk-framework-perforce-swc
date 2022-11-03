@@ -141,7 +141,6 @@ class SelectWorkspaceForm(QtGui.QWidget):
             QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
         yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Proceed Anyway")
         no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
-        # save_btn = confirmation_box.button(QtWidgets.QMessageBox.Save).setText("")
         result = confirmation_box.exec_()
         if result == QtWidgets.QMessageBox.Yes:
             return True
@@ -182,19 +181,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
         """
         something_selected = bool(self.__ui.workspace_list.selectedItems())
         self.__ui.ok_btn.setEnabled(something_selected)
-        """
-        workspace_name = ""
-        for r in range(self.__ui.workspace_list.rowCount()):
-            for c in range(self.__ui.workspace_list.columnCount()-1, -1, -1):
-                widget = self.__ui.workspace_list.cellWidget(r, c)
-                if c == 2 and isinstance(widget, QtGui.QComboBox):
-                    drive_value = widget.currentText()
-                    workspace_name = self.drive_mapping[drive_value]
-                if c == 0:
-                    item = self.__ui.workspace_list.item(r, c)
-                    item.setText(workspace_name)
-        self.app.processEvents()
-        """
+
 
     def _display_workspace(self):
         """
@@ -214,15 +201,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
             self.__ui.workspace_list.setItem(wsi, 0, QtGui.QTableWidgetItem(ws_name))
             self.__ui.workspace_list.setItem(wsi, 1, QtGui.QTableWidgetItem(ws.get("Description", "").strip()))
             self.__ui.workspace_list.setItem(wsi, 2, QtGui.QTableWidgetItem(ws.get("Root", "").strip()))
-            """
-            self.combo_box = QtGui.QComboBox()
-            root_drive = ws.get("Root", "").strip()
-            self.combo_box.addItem(root_drive)
-            for drive in self.drive_mapping.keys():
-                if drive.strip() != root_drive:
-                    self.combo_box.addItem(drive.strip())
-            self.__ui.workspace_list.setCellWidget(wsi, 2, self.combo_box)
-            """
+
         if selected_index >= 0:
             self.__ui.workspace_list.selectRow(selected_index)
         else:
@@ -313,16 +292,6 @@ class SelectWorkspaceForm(QtGui.QWidget):
         """
         Clean all files at startup folder from occurrences of old mapped drive
         """
-        """
-        for path, subdirs, files in os.walk(self._startup_folder):
-            for name in files:
-                file_name = (os.path.join(path, name))
-                self.log_status("Cleaning file {}".format(file_name))
-                os.chmod(file_name, 0o0777)
-                self._clean_file (file_name, drive)
-        """
-        #path = "{}/**".format(self._startup_folder)
-        #for path in glob.glob(path, recursive=True):
         file_match = '{}'.format(self._startup_folder)
         file_list = glob.glob('%s/*.bat' % file_match)
         for path in file_list:
