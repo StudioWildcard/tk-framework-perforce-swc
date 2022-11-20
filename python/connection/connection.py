@@ -16,15 +16,10 @@ import os
 import socket
 import re
 import threading
-import subprocess
-import socket
-import collections
-import time
 
 import sgtk
 from sgtk import TankError
-from sgtk.platform.qt import QtGui, QtCore
-from tank.platform.qt5 import QtWidgets
+from sgtk.platform.qt import QtGui
 
 from P4 import P4, P4Exception
 
@@ -277,11 +272,16 @@ class ConnectionHandler(object):
 
         self._p4.user = str(user)
 
-        login_req = self._login_required()
+        login_req = self._login_required_user()
+        self.log('Login required is: {} '.format(login_req))
+
         if login_req:
+            self.log('login required?: {} '.format(login_req))
             logged_in, _ = self._do_login(True, parent_widget)
+            self.log('logged_in?: {} '.format(logged_in))
             if not logged_in:
                 raise TankError("Unable to login user %s without a password!" % user)
+
 
     def _prompt_for_workspace(self, user, initial_ws, parent_widget=None):
         """
@@ -330,7 +330,7 @@ class ConnectionHandler(object):
 
         return None
 
-    def connect(self, allow_ui=True, user=None, password=None, workspace=None):
+    def connect(self, local_framework=False, allow_ui=True, user=None, password=None, workspace=None):
         """
         Utility method that returns a connection using the current configuration.  If a connection
         can't be established and the user is in ui mode then they will be prompted to edit the
@@ -387,7 +387,11 @@ class ConnectionHandler(object):
                 self._p4.user = user
 
                 # if log-in is required then log-in:
-                login_req = self._login_required()
+                if not local_framework:
+                    login_req = self._login_required()
+                else:
+                    login_req = self._login_required_user()
+
                 if login_req:
                     if password:
                         self._p4.password = password
@@ -407,11 +411,6 @@ class ConnectionHandler(object):
             self.log('finally, validate the workspace ...')
             workspace = workspace if workspace is not None else self._sgtk_workspace()
             if workspace:
-                """
-                # Todo: remove this
-                workspace['Root'] = "T:\\"
-                self.log('workspace to connect : {}'.format(workspace))
-                """
                 try:
                     self._validate_workspace(workspace, user)
                     #self.log('workspace after validation : {}'.format(workspace))
@@ -472,15 +471,22 @@ class ConnectionHandler(object):
         sg_user = sgtk.util.get_current_user(self._fw.sgtk)
         user = self._fw.execute_hook("hook_get_perforce_user", sg_user=sg_user)
 
+        # establish a connection
+        self.connect(local_framework=True)
+
+        #logged_in, show_details = self._do_login(allow_ui=True)
         try:
             from ..widgets import OpenConnectionForm
 
             # get initial user & workspace from settings:
             initial_workspace = self._get_current_workspace()
+            btn_txt = "Browse..."
+            if initial_workspace:
+                btn_txt = "Change..."
 
             # show the connection dialog:
             result, _ = self._fw.engine.show_modal("Perforce Connection", self._fw, OpenConnectionForm,
-                                                   server, user, sg_user, initial_workspace, self._setup_connection_dlg)
+                                                   server, user, sg_user, initial_workspace, self._setup_connection_dlg, btn_txt)
 
             if result == QtGui.QDialog.Accepted:
                 # all good so return the p4 object:
@@ -603,7 +609,7 @@ class ConnectionHandler(object):
             self._validate_workspace(widget.workspace, widget.user)
             self._p4.client = str(widget.workspace)
             self.log('Connecting using workspace: {} ...'.format(self._p4.client))
-            
+
         except TankError as e:
             # likely that the user isn't valid!
             QtGui.QMessageBox.information(widget, "Invalid Perforce Workspace!",
@@ -621,24 +627,29 @@ class ConnectionHandler(object):
 
         :param widget: The OpenConnectionForm object.
         """
+        self.log("_do_connect_and_login ...")
         if not widget.user:
             sg_user = sgtk.util.get_current_user(self._fw.sgtk)
+            self.log('sg_user: {} ...'.format(sg_user))
             msg = ("Unable to browse Perforce Workspaces without a corresponding "
                    "Perforce username for Shotgun user:\n\n   '%s'" % (sg_user["name"] if sg_user else "Unknown"))
             QtGui.QMessageBox.warning(widget, "Unknown Perforce User!", msg)
             return False
 
         server = self.p4_server
+        self.log('server: {} ...'.format(server))
         try:
             # ensure we are connected:
+            self.log('ensure we are connected ...')
             if not self._p4 or not self._p4.connected():
                 self.connect_to_server()
         except TankError as e:
             QtGui.QMessageBox.information(widget, "Perforce Connection Failed",
                                           "Failed to connect to Perforce server:\n\n    '%s'\n\n%s" % (server, e))
             return False
-
+        self.log('We are connected')
         # ensure that the connection is trusted:
+        self.log('ensure that the connection is trusted ...')
         try:
             is_trusted, _ = self._ensure_connection_is_trusted(True, widget)
             if not is_trusted:
@@ -647,7 +658,8 @@ class ConnectionHandler(object):
             QtGui.QMessageBox.information(widget, "Perforce Connection Not Trusted",
                                           "The connection to the Perforce server:\n\n    '%s'\n\is not trusted: %s" % (server, e))
             return False
-
+        self.log('connection is trusted')
+        self.log('make sure the current user is logged in ...')
         try:
             # make sure the current user is logged in:
             self._login_user(widget.user, widget)
@@ -658,6 +670,7 @@ class ConnectionHandler(object):
                                            % (widget.user, server, e)))
             return False
 
+        self.log('current user is logged in')
         return True
 
     def _sgtk_workspace(self):
@@ -675,11 +688,11 @@ class ConnectionHandler(object):
         hostname = socket.gethostname()
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
         workspaces = [c["client"] for c in p4.run("clients")]
-        #self.log('_sgtk_workspace ... ')
-        #self.log('workspace_name ... {}'.format(workspace_name))
-        #self.log('workspaces ... {}'.format(workspaces))
+        self.log('_sgtk_workspace ... ')
+        self.log('workspace_name ... {}'.format(workspace_name))
+        # self.log('workspaces ... {}'.format(workspaces))
         if workspace_name in workspaces:
-            #self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
+            self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
             if not template_name in workspaces:
@@ -697,53 +710,6 @@ class ConnectionHandler(object):
 
         return workspace_name
 
-    def _create_workspace(self, drive):
-        """
-        Create a new workspace based on a drive
-        """
-        p4 = self.connection
-        project_name = self._fw.sgtk.pipeline_configuration._project_name
-        template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
-
-        root_path = os.path.abspath(
-            os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
-
-        hostname = socket.gethostname()
-        drive_letter = self._get_drive_letter(drive)
-        workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
-        workspace_drive_name = "{}_{}".format(workspace_name, drive_letter)
-
-        for workspace in self._selected_workspaces:
-            #self.log("workspace found: {}".format(workspace))
-            if (workspace["client"] == workspace_name or workspace["client"] == workspace_drive_name) and workspace["Root"] == drive:
-                msg = "Existing workspace found: {}".format(workspace_name)
-                self._fw.log_debug(msg)
-                #self.log(msg)
-                return workspace_name
-        else:
-            workspaces = [c["client"] for c in p4.run("clients")]
-            if not template_name in workspaces:
-                msg = "Template workspace '{}' not found! Contact your admin.".format(template_name)
-                self._fw.log_error(msg)
-                #self.log(msg)
-                return None
-
-        # create a new client workspace spec from the project template
-        client = p4.fetch_client("-t", template_name, workspace_drive_name)
-        # set the root to be one-level above the sgtk project root and give a desc
-        client._root = drive
-        client._description = "Sgtk-generated workspace based on {}".format(template_name)
-        # save the client workspace to p4, so we can access it
-        p4.save_client(client)
-
-        return workspace_drive_name
-
-    def _get_drive_letter(self, drive):
-        drive_letter = ""
-        if len(drive) >= 1:
-            drive_letter = drive[0]
-        return drive_letter
-
     def _get_current_workspace(self):
         """
         Returns the current workspace based on the frameworks settings or P4CLIENT
@@ -755,6 +721,9 @@ class ConnectionHandler(object):
         if self._fw.context.project:
             settings = UserSettings("user_details")
             workspace = settings.get_client(self._fw.context.project["id"])
+
+        if not workspace:
+            workspace = self._sgtk_workspace()
 
         if not workspace:
             # see if P4CLIENT is set in the environment:
@@ -798,11 +767,12 @@ class ConnectionHandler(object):
         if user not in ws_users:
             raise TankError("Workspace '%s' is not owned by user '%s'" % (workspace, user))
 
-    def _login_required(self, min_timeout=300):
+    def _login_required_user(self, min_timeout=300):
         """
         Determine if the specified user is required to log in.
         """
         # first, check to see if the user is required to log in:
+        self.log('_login_required? ...')
         users = []
         try:
             # This will raise a P4Exception if the user isn't valid:
@@ -810,24 +780,24 @@ class ConnectionHandler(object):
             users = self._p4.run_users(self._p4.user)
         except P4Exception as e:
             raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
-
+        self.log('users: {} '.format(users))
         if not users:
             # just in case it didn't raise an exception!
+            self.log('There are no users')
             return True
-
-        # users = [...{'Password': 'enabled'}...]
-        if not users[0].get("Password") == "enabled":
-            return False
 
         # get the list of tickets for the current user
         try:
             p4_res = self._p4.run_login("-s")
+            self.log('p4_res: {} '.format(p4_res))
             if not p4_res:
                 # no ticket so login required
+                self.log('no ticket so login required')
                 return True
         except P4Exception:
             # exception raised because user isn't logged in!
             # (TODO) - are there other exceptions that could be raised?
+            self.log('exception raised because user is not logged in')
             return True
 
         # p4_res is of the form:
@@ -841,8 +811,64 @@ class ConnectionHandler(object):
             if timeout >= min_timeout:
                 # user is logged in and has enough
                 # time remaining
+                self.log('user is logged in and has enough time remaining')
                 return False
+        self.log('user is not logged in!')
+        # user isn't logged in!
+        return True
 
+    def _login_required(self, min_timeout=300):
+        """
+        Determine if the specified user is required to log in.
+        """
+        # first, check to see if the user is required to log in:
+        self.log('_login_required? ...')
+        users = []
+        try:
+            # This will raise a P4Exception if the user isn't valid:
+            # (TODO) - check this wasn't just a warning!
+            users = self._p4.run_users(self._p4.user)
+        except P4Exception as e:
+            raise SgtkP4Error(self._p4.errors[0] if self._p4.errors else str(e))
+        self.log('users: {} '.format(users))
+        if not users:
+            # just in case it didn't raise an exception!
+            self.log('Threre are no users')
+            return True
+
+        # users = [...{'Password': 'enabled'}...]
+        if not users[0].get("Password") == "enabled":
+            self.log('Password is enabled')
+            return False
+
+        # get the list of tickets for the current user
+        try:
+            p4_res = self._p4.run_login("-s")
+            self.log('p4_res: {} '.format(p4_res))
+            if not p4_res:
+                # no ticket so login required
+                self.log('no ticket so login required')
+                return True
+        except P4Exception:
+            # exception raised because user isn't logged in!
+            # (TODO) - are there other exceptions that could be raised?
+            self.log('exception raised because user is not logged in')
+            return True
+
+        # p4_res is of the form:
+        # [{'TicketExpiration': '43026', 'User': 'Alan'}]
+        for ticket_status in p4_res:
+            timeout = 0
+            try:
+                timeout = int(ticket_status.get("TicketExpiration", "0"))
+            except ValueError:
+                timeout = 0
+            if timeout >= min_timeout:
+                # user is logged in and has enough
+                # time remaining
+                self.log('user is logged in and has enough time remaining')
+                return False
+        self.log('user is not logged in!')
         # user isn't logged in!
         return True
 

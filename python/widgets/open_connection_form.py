@@ -24,7 +24,7 @@ class OpenConnectionForm(QtGui.QWidget):
     def exit_code(self):
         return self._exit_code
     
-    def __init__(self, server, user, sg_user, workspace="", setup_proc = None, parent=None):
+    def __init__(self, server, user, sg_user, workspace="", setup_proc = None, btn_txt ="Browse..." ,parent=None):
         """
         Construction
         """
@@ -55,7 +55,8 @@ class OpenConnectionForm(QtGui.QWidget):
                                             "current Shotgun user '%s'!") 
                                             % (self._sg_user["name"] if self._sg_user else "Unknown"))
         self.__ui.workspace_edit.setText(workspace)
-        
+        self.__ui.workspace_browse_btn.setText(btn_txt)
+
         if setup_proc:
             setup_proc(self)
         

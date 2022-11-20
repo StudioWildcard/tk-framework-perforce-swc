@@ -322,7 +322,8 @@ class SelectWorkspaceForm(QtGui.QWidget):
         f.write("subst {} {}\n".format(drive, folder))
         f.close()
 
-        os.chmod(file_path, 509)
+        #os.chmod(file_path, 509)
+        os.chmod(f, 0o777)
         if os.path.exists(file_path):
             self.log_status("\nCreated {} file at startup folder {}".format(file_name, self._startup_folder))
             return file_path
