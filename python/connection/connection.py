@@ -388,10 +388,11 @@ class ConnectionHandler(object):
 
                 # if log-in is required then log-in:
                 if not local_framework:
-                    login_req = self._login_required()
+                    #login_req = self._login_required()
+                    login_req = False
                 else:
                     login_req = self._login_required_user()
-
+                self.log('Login required?: {}'.format(login_req))
                 if login_req:
                     if password:
                         self._p4.password = password
