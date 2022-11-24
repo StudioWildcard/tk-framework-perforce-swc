@@ -134,9 +134,10 @@ class ConnectionHandler(object):
         :returns:               True if the connection is trusted, otherwise False.
         :raises:                A TankError or SgtkP4Error if something goes wrong.
         """
-        if not self._p4.port.startswith("ssl:"):
+        #if not self._p4.port.startswith("ssl:"):
+        #if self._p4.port.startswith("ssl:"):
             # non-ssl servers are always trusted
-            return (True, False)
+        return (True, False)
 
         fingerprint = None
         fingerprint_changed = False
@@ -194,14 +195,18 @@ class ConnectionHandler(object):
             # connection isn't trusted yet - extract the fingerprint from the command result:
             reg_exp = re.compile(".*That fingerprint is (?P<fingerprint>([A-F0-9]{2}:)+[A-F0-9]{2})", re.DOTALL)
             re_res = reg_exp.match(msg)
+            """
             if not re_res:
                 # unexpected message - lets hope this never happens!
                 raise TankError("Failed to determine ssl fingerprint from '%s'!" % msg)
-            fingerprint = re_res.group("fingerprint")
+            """
+            if re_res:
+                fingerprint = re_res.group("fingerprint")
 
+        """
         if not fingerprint:
             raise TankError("Failed to determine ssl fingerprint to use!")
-
+        """
         # we have a fingerprint, lets ask the user if it should be trusted:
         establish_trust, show_details = self._fw.engine.execute_in_main_thread(self._prompt_for_trust,
                                                                                fingerprint,
@@ -368,18 +373,19 @@ class ConnectionHandler(object):
                 raise 
 
             # then ensure that the connection is trusted:
-            self.log('then ensure that the connection is trusted ...')
-            try:
-                is_trusted, show_details = self._ensure_connection_is_trusted(allow_ui)
-                if show_details:
-                    # switch to connection dialog - raise a TankError here which will get
-                    # raised if we aren't able to show the connection details dialog
-                    raise TankError("Perforce: Failed to establish trust with server!")
-                elif not is_trusted:
-                    # user decided not to trust!:
-                    return None
-            except SgtkP4Error as e:
-                raise TankError("Perforce: Connection to server '%s' is not trusted: %s" % (server, e))
+            if local_framework:
+                self.log('then ensure that the connection is trusted ...')
+                try:
+                    is_trusted, show_details = self._ensure_connection_is_trusted(allow_ui)
+                    if show_details:
+                        # switch to connection dialog - raise a TankError here which will get
+                        # raised if we aren't able to show the connection details dialog
+                        raise TankError("Perforce: Failed to establish trust with server!")
+                    elif not is_trusted:
+                        # user decided not to trust!:
+                        return None
+                except SgtkP4Error as e:
+                    raise TankError("Perforce: Connection to server '%s' is not trusted: %s" % (server, e))
 
             # log-in user:
             self.log('then  log-in user ...')
