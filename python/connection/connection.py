@@ -103,7 +103,7 @@ class ConnectionHandler(object):
             # connect to the p4 server
             p4.connect()
             if p4.connected():
-                self._fw.log_debug("Connected!")
+                self._fw.log_debug("Connected!!!")
         except Exception as e:
             # Oh no, we failed to connect!
             self._fw.log_debug("Failed to connect!")
@@ -135,7 +135,6 @@ class ConnectionHandler(object):
         :raises:                A TankError or SgtkP4Error if something goes wrong.
         """
         #if not self._p4.port.startswith("ssl:"):
-        #if self._p4.port.startswith("ssl:"):
             # non-ssl servers are always trusted
         return (True, False)
 
@@ -394,7 +393,6 @@ class ConnectionHandler(object):
 
                 # if log-in is required then log-in:
                 if not local_framework:
-                    #login_req = self._login_required()
                     login_req = False
                 else:
                     login_req = self._login_required_user()
@@ -413,6 +411,10 @@ class ConnectionHandler(object):
                         return None
             except SgtkP4Error as e:
                 raise TankError("Perforce: Failed to login user '%s' - %s" % (user, e))
+
+            else:
+                self.log('Login is successful')
+
 
             # finally, validate the workspace:
             self.log('finally, validate the workspace ...')
@@ -495,10 +497,16 @@ class ConnectionHandler(object):
             result, _ = self._fw.engine.show_modal("Perforce Connection", self._fw, OpenConnectionForm,
                                                    server, user, sg_user, initial_workspace, self._setup_connection_dlg, btn_txt)
 
+            self.log('Connection result is : {}'.format(result))
+            return result
+            """
             if result == QtGui.QDialog.Accepted:
                 # all good so return the p4 object:
                 self._save_current_workspace(self._p4.client)
-                return self._p4
+                self.log("all good so return the p4 object")
+                #return self._p4
+                return True
+            """
 
         except Exception:
             pass
@@ -625,7 +633,7 @@ class ConnectionHandler(object):
             return
 
         # success so lets close the widget!
-        self.log('Connected! ')
+        self.log('Connected!! ')
         widget.close()
 
     def _do_connect_and_login(self, widget):
