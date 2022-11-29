@@ -57,6 +57,9 @@ class ConnectionHandler(object):
         self._fw = fw
         self._p4 = None
         self.p4_server = self._get_p4_server()
+        self.templates = {"swc-perforce.studiowildcard.com:1666":"sgtk_Ark2Depot_master",
+                          "ssl:192.168.2.238:1666":"sgtk_devaDepot_master",
+                          "ssl:artifact.studiowildcard.com:20654":"sgtk_devaDepot_master"}
 
     @property
     def connection(self):
@@ -688,9 +691,17 @@ class ConnectionHandler(object):
         self.log('current user is logged in')
         return True
 
+    def _get_template(self):
+        template_name = ""
+        if self.p4_server.startswith("swc"):
+            template_name =  "sgtk_Ark2Depot_master"
+        elif self.p4_server.startswith("ssl"):
+            template_name = "sgtk_devaDepot_master"
+        return template_name
+
     def _sgtk_workspace(self):
         """
-        Fetches the Sgtk-created workspace for perforce or creates one if it doesnt
+        Fetches the Sgtk-created workspace for perforce or creates one if it does not
         exist.
 
         :returns: The name of the sgtk workspace.
@@ -700,28 +711,41 @@ class ConnectionHandler(object):
         project_name = self._fw.sgtk.pipeline_configuration._project_name
         root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
         template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
+
+        self.log('template_name is {}'.format(template_name))
         hostname = socket.gethostname()
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
+        self.log('workspace_name is {}'.format(workspace_name))
         workspaces = [c["client"] for c in p4.run("clients")]
-        self.log('_sgtk_workspace ... ')
-        self.log('workspace_name ... {}'.format(workspace_name))
-        # self.log('workspaces ... {}'.format(workspaces))
+        self.log('workspaces are ... {}'.format(workspaces))
+
         if workspace_name in workspaces:
             self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
-            if not template_name in workspaces:
-                self._fw.log_error("Template workspace '{}' not found! Contact your admin.".format(template_name))
-                return None
+            if template_name not in workspaces:
+                if self.p4_server in self.templates:
+                    template_name = self.templates[self.p4_server]
+                    if template_name not in workspaces:
+                        template_name = self._get_template()
+                else:
+                    template_name = self._get_template()
+                if template_name not in workspaces:
+                    self._fw.log_error("Template workspace '{}' not found! Contact your admin.".format(template_name))
+                    return None
 
         self._fw.log_debug("Creating new workspace: {}".format(workspace_name))
-        # create a new client workspace spec from the project template
-        client = p4.fetch_client("-t", template_name, workspace_name)
-        # set the root to be one-level above the sgtk project root and give a desc
-        client._root = root_path
-        client._description = "Sgtk-generated workspace based on {}".format(template_name)
-        # save the client workspace to p4 so we can access it
-        p4.save_client(client)
+        try:
+            # create a new client workspace spec from the project template
+            client = p4.fetch_client("-t", template_name, workspace_name)
+            # set the root to be one-level above the sgtk project root and give a desc
+            client._root = root_path
+            client._description = "Sgtk-generated workspace based on {}".format(template_name)
+            # save the client workspace to p4 so we can access it
+            p4.save_client(client)
+        except:
+            self._fw.log_error("Error creating new workspace: '{}'! Contact your admin.".format(template_name))
+            return None
 
         return workspace_name
 
@@ -788,6 +812,7 @@ class ConnectionHandler(object):
         """
         # first, check to see if the user is required to log in:
         self.log('_login_required? ...')
+        """
         users = []
         try:
             # This will raise a P4Exception if the user isn't valid:
@@ -800,7 +825,7 @@ class ConnectionHandler(object):
             # just in case it didn't raise an exception!
             self.log('There are no users')
             return True
-
+        """
         # get the list of tickets for the current user
         try:
             p4_res = self._p4.run_login("-s")
