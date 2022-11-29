@@ -913,15 +913,19 @@ class ConnectionHandler(object):
         return True
 
     def _get_p4_server(self):
+        user = sgtk.util.get_current_user(self._fw.sgtk)        
+        sg_user = self._fw.shotgun.find_one('HumanUser', [['id', 'is', user['id']]], ["sg_region"])
         server_field = self._fw.get_setting("server_field")
         sg_project = self._fw.shotgun.find_one('Project', [['id', 'is', self._fw.context.project['id']]], [server_field])
         server = sg_project.get(server_field)
+        region = sg_user.get("sg_region")
+        sg_server = self._fw.shotgun.find_one('CustomNonProjectEntity02', [['id', 'is', server['id']]], [region])
 
-        if not server:
+        if not sg_server:
             self._fw.log_error("No server was configured for this project! Enter the p4 server in the project field '{}'".format(server_field))
             return None
 
-        return str(sg_project.get(server_field))
+        return str(sg_server.get(region))
 
     def log(self, msg, error=0):
         if logger:
