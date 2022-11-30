@@ -913,6 +913,9 @@ class ConnectionHandler(object):
         return True
 
     def _get_p4_server(self):
+        """
+        Get P4 server based on sg_region
+        """
         user = sgtk.util.get_current_user(self._fw.sgtk)        
         sg_user = self._fw.shotgun.find_one('HumanUser', [['id', 'is', user['id']]], ["sg_region"])
         server_field = self._fw.get_setting("server_field")
