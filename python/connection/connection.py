@@ -488,6 +488,17 @@ class ConnectionHandler(object):
 
         #logged_in, show_details = self._do_login(allow_ui=True)
         try:
+            self._fw.log_debug("Attempting to log-in user %s to server %s" % (self._p4.user, self._p4.port))
+            self._p4.run_login()
+        except P4Exception as e:
+            # keep track of error message:
+            error_msg = self._p4.errors[0] if self._p4.errors else str(e)
+            self._fw.log_debug(error_msg)
+        else:
+            # successfully logged in!
+            return (True, False)
+
+        try:
             from ..widgets import OpenConnectionForm
 
             # get initial user & workspace from settings:
@@ -502,14 +513,7 @@ class ConnectionHandler(object):
 
             self.log('Connection result is : {}'.format(result))
             return result
-            """
-            if result == QtGui.QDialog.Accepted:
-                # all good so return the p4 object:
-                self._save_current_workspace(self._p4.client)
-                self.log("all good so return the p4 object")
-                #return self._p4
-                return True
-            """
+
 
         except Exception:
             pass
@@ -554,7 +558,7 @@ class ConnectionHandler(object):
                 return (True, False)
 
             if allow_ui and self._fw.engine.has_ui:
-
+                self._fw.log_debug("Attempting to log-in user %s to server %s using Perforce Password form" % (self._p4.user, self._p4.port))
                 prompt_error_msg = None
                 if not is_first_attempt:
                     prompt_error_msg = "Log-in failed: %s" % error_msg
@@ -717,7 +721,7 @@ class ConnectionHandler(object):
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
         self.log('workspace_name is {}'.format(workspace_name))
         workspaces = [c["client"] for c in p4.run("clients")]
-        self.log('workspaces are ... {}'.format(workspaces))
+        #self.log('workspaces are ... {}'.format(workspaces))
 
         if workspace_name in workspaces:
             self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
@@ -811,7 +815,7 @@ class ConnectionHandler(object):
         Determine if the specified user is required to log in.
         """
         # first, check to see if the user is required to log in:
-        self.log('_login_required? ...')
+        self.log('is login required?')
         """
         users = []
         try:
@@ -862,7 +866,7 @@ class ConnectionHandler(object):
         Determine if the specified user is required to log in.
         """
         # first, check to see if the user is required to log in:
-        self.log('_login_required? ...')
+        self.log('first, check to see if the user is required to log in')
         users = []
         try:
             # This will raise a P4Exception if the user isn't valid:
