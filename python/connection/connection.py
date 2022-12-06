@@ -16,6 +16,8 @@ import os
 import socket
 import re
 import threading
+import hashlib
+import subprocess
 
 import sgtk
 from sgtk import TankError
@@ -514,7 +516,6 @@ class ConnectionHandler(object):
             self.log('Connection result is : {}'.format(result))
             return result
 
-
         except Exception:
             pass
 
@@ -559,6 +560,7 @@ class ConnectionHandler(object):
 
             if allow_ui and self._fw.engine.has_ui:
                 self._fw.log_debug("Attempting to log-in user %s to server %s using Perforce Password form" % (self._p4.user, self._p4.port))
+                self._fw.log_debug("Env variable P4PASSWD is: %s" % os.environ.get('P4PASSWD'))
                 prompt_error_msg = None
                 if not is_first_attempt:
                     prompt_error_msg = "Log-in failed: %s" % error_msg
@@ -578,11 +580,36 @@ class ConnectionHandler(object):
 
                 # update password for next iteration:
                 self._p4.password = password
+                # Store password as MD5 hash
+                self._store_password(password)
                 is_first_attempt = False
 
             else:
                 # no UI so just raise error:
                 raise SgtkP4Error(error_msg)
+
+    def _store_password(self, password):
+        """
+        Store password as MD5 hash
+        """
+        try:
+            self._fw.log_debug("Env variable P4PASSWD is: %s" % os.environ.get('P4PASSWD'))
+            md5_str = hashlib.md5(password.encode("utf")).hexdigest()
+            # md5_str = hashlib.md5(password).hexdigest()
+            md5_str = md5_str.upper()
+            self._fw.log_debug("Storing password as Md5 hash: %s" % md5_str)
+            self._fw.log_debug("Setting env variable P4PASSWD as: %s" % md5_str)
+            os.environ["P4PASSWD"] = md5_str
+
+            cmd_arg = "P4PASSWD={}".format(md5_str)
+            cmd = ['set', cmd_arg]
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True, env=os.environ)
+            std_out, std_err = process.communicate()
+
+            self._fw.log_debug("env variable P4PASSWD is: %s" % os.environ.get('P4PASSWD'))
+        except:
+            self._fw.log_debug("Unable to store password")
+            pass
 
     def _prompt_for_password(self, error_msg, parent_widget):
         """
