@@ -16,16 +16,48 @@ import pprint
 import random
 import time
 import sys
-
+import urllib
 
 from functools import partial
 
 from .sync_workers import SyncWorker, AssetInfoGatherWorker
 from .utils import PrefFile, open_browser
+# standard toolkit logger
+logger = sgtk.platform.get_logger(__name__)
+#from .loader_utils import resolve_filters
+
+from .model_status import SgStatusModel
+from .model_latestpublish import SgLatestPublishModel
+from .model_publishhistory import SgPublishHistoryModel
+from .delegate_publish_history import SgPublishHistoryDelegate
+
+from .loader_action_manager import LoaderActionManager
 
 # file base for accessing Qt resources outside of resource scope
 basepath = os.path.dirname(os.path.abspath(__file__))
 
+logger.info(">>>>>>  tk-framework-shotgunutil, shotgun_model")
+
+# import frameworks
+shotgun_model = sgtk.platform.import_framework(
+    "tk-framework-shotgunutils", "shotgun_model"
+)
+settings = sgtk.platform.import_framework("tk-framework-shotgunutils", "settings")
+help_screen = sgtk.platform.import_framework("tk-framework-qtwidgets", "help_screen")
+overlay_widget = sgtk.platform.import_framework(
+    "tk-framework-qtwidgets", "overlay_widget"
+)
+shotgun_search_widget = sgtk.platform.import_framework(
+    "tk-framework-qtwidgets", "shotgun_search_widget"
+)
+task_manager = sgtk.platform.import_framework(
+    "tk-framework-shotgunutils", "task_manager"
+)
+shotgun_globals = sgtk.platform.import_framework(
+    "tk-framework-shotgunutils", "shotgun_globals"
+)
+
+ShotgunModelOverlayWidget = overlay_widget.ShotgunModelOverlayWidget
 
 class SyncForm(QtGui.QWidget):
 
@@ -33,7 +65,7 @@ class SyncForm(QtGui.QWidget):
     _p4 = None
         
     progress = 0
-    
+    selection_changed = QtCore.Signal()
     def __init__(self, parent_sgtk_app, entities_to_sync, specific_files,  parent=None):
         """
         Construction of sync UI
@@ -45,7 +77,28 @@ class SyncForm(QtGui.QWidget):
         self.app = parent_sgtk_app
         self.entities_to_sync = entities_to_sync
         self.specific_files= specific_files
+
+        self._action_manager = LoaderActionManager()
+        # self._action_manager = None
+
+        self._sg_data = {}
+        self._key = None
         self.scan()
+
+        # create a background task manager
+        self._task_manager = task_manager.BackgroundTaskManager(
+            self, start_processing=True, max_threads=2
+        )
+        shotgun_globals.register_bg_task_manager(self._task_manager)
+
+        # hook a helper model tracking status codes so we
+        # can use those in the UI
+        self._status_model = SgStatusModel(self, self._task_manager)
+
+        self.init_details_panel()
+
+
+
 
     def log_error(self, e):
         self.fw.log_error(str(e))
@@ -84,7 +137,8 @@ class SyncForm(QtGui.QWidget):
         self.make_widgets()
         self.setup_ui()
 
-        # add assets and what we want to sync into the view
+        # add assets and what we want to sync
+        # into the view
         if self.entities_to_sync:
             self.populate_assets()
         else:
@@ -142,26 +196,27 @@ class SyncForm(QtGui.QWidget):
 
         self._rescan = QtGui.QPushButton("Rescan")
 
-  
-
-
-       
 
     def setup_ui(self):
         """
         Lays out and customizes widgets for the main form
-        """       
+        """
+
+        self.resize(1200, 800)
+
         # set main layout
+        self._gui_layout = QtGui.QHBoxLayout()
         self._main_layout = QtGui.QVBoxLayout()
         self._menu_layout = QtGui.QHBoxLayout()
-        
-        self.setLayout(self._main_layout)
+
+        #self.setLayout(self._main_layout)
+        self.setLayout(self._gui_layout)
 
         # hide progress until we run the sync
         self._progress_bar.setVisible(False)
 
         # asset tree setup
-        self.tree_header = ["Asset Name", "Status", "Detail"]
+        self.tree_header = ["Asset Name", "Status", "Version", "Detail"]
         for h in self.tree_header:
             setattr(self, h.replace(' ', "_").upper(), self.tree_header.index(h))
 
@@ -170,7 +225,8 @@ class SyncForm(QtGui.QWidget):
         self._asset_tree.setHeaderItem(self._asset_tree_header)  
         self._asset_tree.setWordWrap(True)
         self._asset_tree.setColumnWidth(0, 150)
-        self._asset_tree.setColumnWidth(1, 160)
+        self._asset_tree.setColumnWidth(1, 120)
+        self._asset_tree.setColumnWidth(2, 50)
 
         self._hide_syncd.setText("Hide if nothing to sync")
         self._hide_syncd.stateChanged.connect(self.save_ui_state)
@@ -197,6 +253,98 @@ class SyncForm(QtGui.QWidget):
         self._main_layout.addWidget(self._progress_bar)
         self._main_layout.addLayout(self.sync_layout)
 
+        # details layout
+        self.details_layout = QtGui.QVBoxLayout()
+        self.details_layout.setSpacing(2)
+        self.details_layout.setContentsMargins(4, 4, 4, 4)
+        self.details_layout.setObjectName("details_layout")
+
+        self.horizontalLayout = QtGui.QHBoxLayout()
+        self.horizontalLayout.setObjectName("horizontalLayout")
+        spacerItem2 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem2)
+        self.details_image = QtGui.QLabel()
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Fixed, QtGui.QSizePolicy.Fixed)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.details_image.sizePolicy().hasHeightForWidth())
+        self.details_image.setSizePolicy(sizePolicy)
+        self.details_image.setMinimumSize(QtCore.QSize(256, 200))
+        self.details_image.setMaximumSize(QtCore.QSize(256, 200))
+        self.details_image.setScaledContents(True)
+        self.details_image.setAlignment(QtCore.Qt.AlignCenter)
+        self.details_image.setObjectName("details_image")
+        self.horizontalLayout.addWidget(self.details_image)
+        spacerItem3 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout.addItem(spacerItem3)
+        self.details_layout.addLayout(self.horizontalLayout)
+
+        self.horizontalLayout_5 = QtGui.QHBoxLayout()
+        self.horizontalLayout_5.setObjectName("horizontalLayout_5")
+        self.details_header = QtGui.QLabel()
+        self.details_header.setAlignment(QtCore.Qt.AlignLeading | QtCore.Qt.AlignLeft | QtCore.Qt.AlignTop)
+        self.details_header.setWordWrap(True)
+        self.details_header.setObjectName("details_header")
+        self.horizontalLayout_5.addWidget(self.details_header)
+        spacerItem4 = QtGui.QSpacerItem(40, 20, QtGui.QSizePolicy.Expanding, QtGui.QSizePolicy.Minimum)
+        self.horizontalLayout_5.addItem(spacerItem4)
+        self.verticalLayout_4 = QtGui.QVBoxLayout()
+        self.verticalLayout_4.setObjectName("verticalLayout_4")
+        self.detail_playback_btn = QtGui.QToolButton()
+        self.detail_playback_btn.setMinimumSize(QtCore.QSize(55, 55))
+        self.detail_playback_btn.setMaximumSize(QtCore.QSize(55, 55))
+        self.detail_playback_btn.setText("")
+        icon4 = QtGui.QIcon()
+        icon4.addPixmap(QtGui.QPixmap(":/res/play_icon.png"), QtGui.QIcon.Normal, QtGui.QIcon.Off)
+        self.detail_playback_btn.setIcon(icon4)
+        self.detail_playback_btn.setIconSize(QtCore.QSize(40, 40))
+        self.detail_playback_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextBesideIcon)
+        self.detail_playback_btn.setObjectName("detail_playback_btn")
+        self.detail_playback_btn.setToolTip("The most recent published version has some playable media associated. Click this button to launch the ShotGrid <b>Media Center</b> web player to see the review version and any notes and comments that have been submitted.")
+
+        self.verticalLayout_4.addWidget(self.detail_playback_btn)
+        self.detail_actions_btn = QtGui.QToolButton()
+        self.detail_actions_btn.setMinimumSize(QtCore.QSize(55, 0))
+        self.detail_actions_btn.setMaximumSize(QtCore.QSize(55, 16777215))
+        self.detail_actions_btn.setPopupMode(QtGui.QToolButton.InstantPopup)
+        self.detail_actions_btn.setToolButtonStyle(QtCore.Qt.ToolButtonTextOnly)
+        self.detail_actions_btn.setObjectName("detail_actions_btn")
+        self.detail_actions_btn.setText("Actions")
+        self.verticalLayout_4.addWidget(self.detail_actions_btn)
+
+        self.horizontalLayout_5.addLayout(self.verticalLayout_4)
+        self.details_layout.addLayout(self.horizontalLayout_5)
+
+        self.version_history_label = QtGui.QLabel()
+        sizePolicy = QtGui.QSizePolicy(QtGui.QSizePolicy.Preferred, QtGui.QSizePolicy.Maximum)
+        sizePolicy.setHorizontalStretch(0)
+        sizePolicy.setVerticalStretch(0)
+        sizePolicy.setHeightForWidth(self.version_history_label.sizePolicy().hasHeightForWidth())
+        self.version_history_label.setSizePolicy(sizePolicy)
+        self.version_history_label.setStyleSheet("QLabel { padding-top: 14px}")
+        self.version_history_label.setAlignment(QtCore.Qt.AlignCenter)
+        self.version_history_label.setWordWrap(True)
+        self.version_history_label.setObjectName("version_history_label")
+        self.version_history_label.setText("<small>Complete Version History</small>")
+        #self.version_history_label.setText(QtGui.QApplication.translate("Dialog", "<small>Complete Version History</small>", None, QtGui.QApplication.UnicodeUTF8))
+        self.details_layout.addWidget(self.version_history_label)
+
+        self.history_view = QtGui.QListView()
+        self.history_view.setVerticalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+        self.history_view.setHorizontalScrollMode(QtGui.QAbstractItemView.ScrollPerPixel)
+        self.history_view.setUniformItemSizes(True)
+        self.history_view.setObjectName("history_view")
+        self.details_layout.addWidget(self.history_view)
+
+        self.container_widget = QtGui.QWidget()
+        self.container_widget.setLayout(self.details_layout)
+        self.container_widget.setFixedWidth(300)
+
+        # arrange widgets in gui layout
+        self._gui_layout.addLayout(self._main_layout)
+        # self._gui_layout.addLayout(self.details_layout)
+        self._gui_layout.addWidget(self.container_widget)
+
         # css
         self.setStyleSheet("""
             QTreeWidget::item { padding: 5px; }
@@ -208,7 +356,19 @@ class SyncForm(QtGui.QWidget):
 
         for f in self.use_filters:
             self.button_menu_factory(f)
-        
+
+        # Add info button
+        self.info = QtGui.QToolButton()
+        self.info.setMinimumSize(QtCore.QSize(80, 26))
+        self.info.setObjectName("info")
+        self.info.setToolTip("Use this button to <i>toggle details on and off</i>.")
+        #self.info.setText("Show Details")
+        self.info.setText("Hide Details")
+        self._menu_layout.addWidget(self.info)
+
+        # Single click on tree item
+        self._asset_tree.itemClicked.connect(self.on_item_clicked)
+
         # connect right_click_menu to tree
         self._asset_tree.setContextMenuPolicy(QtCore.Qt.CustomContextMenu)
         self._asset_tree.customContextMenuRequested.connect(self.open_context_menu)
@@ -219,6 +379,75 @@ class SyncForm(QtGui.QWidget):
         if self.specific_files:
             self._rescan.setVisible(False)
             self._force_sync.setVisible(False)
+
+    def init_details_panel(self):
+
+        # details pane
+        # self._details_pane_visible = False
+        self._details_pane_visible = True
+
+        self._details_action_menu = QtGui.QMenu()
+        self.detail_actions_btn.setMenu(self._details_action_menu)
+
+        self.info.clicked.connect(self._toggle_details_pane)
+
+
+        self._publish_history_model = SgPublishHistoryModel(self, self._task_manager)
+
+        self._publish_history_model_overlay = ShotgunModelOverlayWidget(
+            self._publish_history_model, self.history_view
+        )
+
+        self._publish_history_proxy = QtGui.QSortFilterProxyModel(self)
+        self._publish_history_proxy.setSourceModel(self._publish_history_model)
+
+        # now use the proxy model to sort the data to ensure
+        # higher version numbers appear earlier in the list
+        # the history model is set up so that the default display
+        # role contains the version number field in shotgun.
+        # This field is what the proxy model sorts by default
+        # We set the dynamic filter to true, meaning QT will keep
+        # continously sorting. And then tell it to use column 0
+        # (we only have one column in our models) and descending order.
+        self._publish_history_proxy.setDynamicSortFilter(True)
+        self._publish_history_proxy.sort(0, QtCore.Qt.DescendingOrder)
+
+        self.history_view.setModel(self._publish_history_proxy)
+
+        self._history_delegate = SgPublishHistoryDelegate(
+            self.history_view, self._status_model, self._action_manager
+        )
+        self.history_view.setItemDelegate(self._history_delegate)
+
+        # event handler for when the selection in the history view is changing
+        # note! Because of some GC issues (maya 2012 Pyside), need to first establish
+        # a direct reference to the selection model before we can set up any signal/slots
+        # against it
+        self._history_view_selection_model = self.history_view.selectionModel()
+        self._history_view_selection_model.selectionChanged.connect(
+            self._on_history_selection
+        )
+
+        self._multiple_publishes_pixmap = QtGui.QPixmap(
+            ":/res/multiple_publishes_512x400.png"
+        )
+        self._no_selection_pixmap = QtGui.QPixmap(":/res/no_item_selected_512x400.png")
+        self._no_pubs_found_icon = QtGui.QPixmap(":/res/no_publishes_found.png")
+
+        self.detail_playback_btn.clicked.connect(self._on_detail_version_playback)
+        self._current_version_detail_playback_url = None
+
+        # set up right click menu for the main publish view
+        self._refresh_history_action = QtGui.QAction("Refresh", self.history_view)
+        self._refresh_history_action.triggered.connect(
+            self._publish_history_model.async_refresh
+        )
+        self.history_view.addAction(self._refresh_history_action)
+        self.history_view.setContextMenuPolicy(QtCore.Qt.ActionsContextMenu)
+
+        # if an item in the list is double clicked the default action is run
+        self.history_view.doubleClicked.connect(self._on_history_double_clicked)
+
 
 
     def button_menu_factory(self, name= None ):
@@ -254,15 +483,314 @@ class SyncForm(QtGui.QWidget):
         QtGui.QWidget.resizeEvent( self, event )
         self.save_ui_state()
 
+    def _toggle_details_pane(self):
+        """
+        Executed when someone clicks the show/hide details button
+        """
+        if self.container_widget.isVisible():
+            self._set_details_pane_visiblity(False)
+        else:
+            self._set_details_pane_visiblity(True)
+
+    def _set_details_pane_visiblity(self, visible):
+        """
+        Specifies if the details pane should be visible or not
+        """
+        # store our value in a setting
+        #self._settings_manager.store("show_details", visible)
+
+        if visible == False:
+            # hide details pane
+            self._details_pane_visible = False
+            self.container_widget.setVisible(False)
+            self.info.setText("Show Details")
+
+        else:
+            # show details pane
+            self._details_pane_visible = True
+            self.container_widget.setVisible(True)
+            self.info.setText("Hide Details")
 
 
+            # if there is something selected, make sure the detail
+            # section is focused on this
+            self._setup_details_panel(self._key)
 
+    def _setup_details_panel(self, key):
+        """
+        Sets up the details panel with info for a given item.
+        """
+
+        def __make_table_row(left, right):
+            """
+            Helper method to make a detail table row
+            """
+            return (
+                    "<tr><td><b style='color:#2C93E2'>%s</b>&nbsp;</td><td>%s</td></tr>"
+                    % (left, right)
+            )
+
+        def __set_publish_ui_visibility(is_publish):
+            """
+            Helper method to enable disable publish specific details UI
+            """
+            # disable version history stuff
+            self.version_history_label.setEnabled(is_publish)
+            self.history_view.setEnabled(is_publish)
+
+            # hide actions and playback stuff
+            self.detail_actions_btn.setVisible(is_publish)
+            self.detail_playback_btn.setVisible(is_publish)
+
+        def __clear_publish_history(pixmap):
+            """
+            Helper method that clears the history view on the right hand side.
+
+            :param pixmap: image to set at the top of the history view.
+            """
+            self._publish_history_model.clear()
+            self.details_header.setText("")
+            self.details_image.setPixmap(pixmap)
+            __set_publish_ui_visibility(False)
+
+        # note - before the UI has been shown, querying isVisible on the actual
+        # widget doesn't work here so use member variable to track state instead
+        if not self._details_pane_visible:
+            return
+
+        if not key:
+            __clear_publish_history(self._no_selection_pixmap)
+
+        if key and key not in self._sg_data:
+            __clear_publish_history(self._no_pubs_found_icon)
+            self.fw.log_info("Unable to find {} in SG data. Perhaps, item is not published".format(key))
+
+        if key and key in self._sg_data:
+
+            # render out details
+            #thumb_pixmap = item.icon().pixmap(512)
+            if "image" in self._sg_data[key]:
+                #thumb_pixmap = self._sg_data[key]["image"]
+                #self.details_image.setPixmap(thumb_pixmap)
+                image_url = self._sg_data[key]["image"]
+                file_path = "C:/temp/tmp.png"
+                urllib.request.urlretrieve(image_url, file_path)
+                self.details_image.setPixmap(QtGui.QPixmap(file_path))
+
+            sg_data = self._sg_data[key]
+
+            if sg_data is None:
+                # an item which doesn't have any sg data directly associated
+                # typically an item higher up the tree
+                # just use the default text
+                if "name" in sg_data:
+                    folder_name = __make_table_row("Name", sg_data.get("name"))
+                    self.details_header.setText("<table>%s</table>" % folder_name)
+                    __set_publish_ui_visibility(False)
+
+                """
+                elif item.data(SgLatestPublishModel.IS_FOLDER_ROLE):
+                    # folder with sg data - basically a leaf node in the entity tree
+    
+                    status_code = sg_data.get("sg_status_list")
+                    if status_code is None:
+                        status_name = "No Status"
+                    else:
+                        status_name = self._status_model.get_long_name(status_code)
+    
+                    status_color = self._status_model.get_color_str(status_code)
+                    if status_color:
+                        status_name = (
+                                "%s&nbsp;<span style='color: rgb(%s)'>&#9608;</span>"
+                                % (status_name, status_color)
+                        )
+    
+                    if sg_data.get("description"):
+                        desc_str = sg_data.get("description")
+                    else:
+                        desc_str = "No description entered."
+    
+                    msg = ""
+                    display_name = shotgun_globals.get_type_display_name(sg_data["type"])
+                    msg += __make_table_row(
+                        "Name", "%s %s" % (display_name, sg_data.get("code"))
+                    )
+                    msg += __make_table_row("Status", status_name)
+                    msg += __make_table_row("Description", desc_str)
+                    self.details_header.setText("<table>%s</table>" % msg)
+    
+                    # blank out the version history
+                    __set_publish_ui_visibility(False)
+                    self._publish_history_model.clear()
+                """
+            else:
+                # this is a publish!
+                __set_publish_ui_visibility(True)
+
+                sg_item = self._sg_data[key]
+
+                # sort out the actions button
+                actions = self._action_manager.get_actions_for_publish(
+                    sg_item, self._action_manager.UI_AREA_DETAILS
+                )
+                if len(actions) == 0:
+                    self.detail_actions_btn.setVisible(False)
+                else:
+                    self.detail_playback_btn.setVisible(True)
+                    self._details_action_menu.clear()
+                    for a in actions:
+                        self._dynamic_widgets.append(a)
+                        self._details_action_menu.addAction(a)
+
+                # if there is an associated version, show the play button
+                if sg_item.get("version"):
+                    sg_url = sgtk.platform.current_bundle().shotgun.base_url
+                    url = "%s/page/media_center?type=Version&id=%d" % (
+                        sg_url,
+                        sg_item["version"]["id"],
+                    )
+
+                    self.detail_playback_btn.setVisible(True)
+                    self._current_version_detail_playback_url = url
+
+                else:
+                    self.detail_playback_btn.setVisible(False)
+                    self._current_version_detail_playback_url = None
+
+                if sg_item.get("name") is None:
+                    name_str = "No Name"
+                else:
+                    name_str = sg_item.get("name")
+
+                #type_str = shotgun_model.get_sanitized_data(
+                #    #item, SgLatestPublishModel.PUBLISH_TYPE_NAME_ROLE
+                #    sg_item.get("type"), SgLatestPublishModel.PUBLISH_TYPE_NAME_ROLE
+                #)
+
+                if "published_file_type" in sg_item and "name" in sg_item["published_file_type"]:
+                    type_str = sg_item["published_file_type"]["name"]
+                else:
+                    type_str = sg_item.get("type")
+                msg = ""
+                msg += __make_table_row("Name", name_str)
+                msg += __make_table_row("Type", type_str)
+
+                version = sg_item.get("version_number")
+                vers_str = "%03d" % version if version is not None else "N/A"
+
+                msg += __make_table_row("Version", "%s" % vers_str)
+
+                if sg_item.get("entity"):
+                    display_name = shotgun_globals.get_type_display_name(
+                        sg_item.get("entity").get("type")
+                    )
+                    entity_str = "<b>%s</b> %s" % (
+                        display_name,
+                        sg_item.get("entity").get("name"),
+                    )
+                    msg += __make_table_row("Link", entity_str)
+
+                # sort out the task label
+                if sg_item.get("task"):
+
+                    if sg_item.get("task.Task.content") is None:
+                        task_name_str = "Unnamed"
+                    else:
+                        task_name_str = sg_item.get("task.Task.content")
+
+                    if sg_item.get("task.Task.sg_status_list") is None:
+                        task_status_str = "No Status"
+                    else:
+                        task_status_code = sg_item.get("task.Task.sg_status_list")
+                        task_status_str = self._status_model.get_long_name(
+                            task_status_code
+                        )
+
+                    msg += __make_table_row(
+                        "Task", "%s (%s)" % (task_name_str, task_status_str)
+                    )
+
+                # if there is a version associated, get the status for this
+                if sg_item.get("version.Version.sg_status_list"):
+                    task_status_code = sg_item.get("version.Version.sg_status_list")
+                    task_status_str = self._status_model.get_long_name(task_status_code)
+                    msg += __make_table_row("Review", task_status_str)
+
+                self.details_header.setText("<table>%s</table>" % msg)
+
+                # tell details pane to load stuff
+                sg_data = self._sg_data[key]
+                # self.log('******************************************** sg_data')
+                #for k, v in sg_data.items():
+                #    self.log('{}: {}'.format(k, v))
+                self._publish_history_model.load_data(sg_data)
+
+            self.details_header.updateGeometry()
+
+    def on_item_clicked(self, item, col):
+        """
+        Single click on tree item
+        """
+        #tree_item = self._asset_tree.itemAt(it, col)
+        self.fw.log_info("Click on Tree item, {}".format(item.text(col)))
+        key = item.text(col)
+        key = os.path.basename(key)
+        self.fw.log_info("Key is {}".format(key))
+        self._key = key
+        self._setup_details_panel(key)
+
+    def _on_history_selection(self, selected, deselected):
+        """
+        Called when the selection changes in the history view in the details panel
+
+        :param selected:    Items that have been selected
+        :param deselected:  Items that have been deselected
+        """
+        # emit the selection_changed signal
+        self.selection_changed.emit()
+
+    def _on_detail_version_playback(self):
+        """
+        Callback when someone clicks the version playback button
+        """
+        # the code that sets up the version button also populates
+        # a member variable which olds the current media center url.
+        if self._current_version_detail_playback_url:
+            QtGui.QDesktopServices.openUrl(
+                QtCore.QUrl(self._current_version_detail_playback_url)
+            )
+
+    def _on_history_double_clicked(self, model_index):
+        """
+        When someone double clicks on a publish in the history view, run the
+        default action
+
+        :param model_index:    The model index of the item that was double clicked
+        """
+        # the incoming model index is an index into our proxy model
+        # before continuing, translate it to an index into the
+        # underlying model
+        proxy_model = model_index.model()
+        source_index = proxy_model.mapToSource(model_index)
+
+        # now we have arrived at our model derived from StandardItemModel
+        # so let's retrieve the standarditem object associated with the index
+        item = source_index.model().itemFromIndex(source_index)
+
+        # Run default action.
+        sg_item = shotgun_model.get_sg_data(model_index)
+        default_action = self._action_manager.get_default_action_for_publish(
+            sg_item, self._action_manager.UI_AREA_HISTORY
+        )
+        if default_action:
+            default_action.trigger()
 
     def open_context_menu(self, point):
         # Infos about the node selected.
         try:
             os_filebrowser_map = {
                 "win32" : "Explorer",
+                #"win32": "Chrome",
                 "darwin" : "Finder"
             }
             os_filebrowser = "file browser"
@@ -270,11 +798,11 @@ class SyncForm(QtGui.QWidget):
                 os_filebrowser = os_filebrowser_map[sys.platform]
             
             tree_item = self._asset_tree.itemAt(point)
-            path_to_open = os.path.dirname(tree_item.data(2, QtCore.Qt.UserRole))
-        
+            path_to_open = os.path.dirname(tree_item.data(3, QtCore.Qt.UserRole))
+            self.fw.log_info("Right click on Tree item, data: {}".format(tree_item.data))
 
             menu = QtGui.QMenu()
-            action = menu.addAction("Open path in {}".format(os_filebrowser), 
+            action = menu.addAction("Open path in {}".format(os_filebrowser),
                                     partial(open_browser, path_to_open))
                 
             menu.exec_(self._asset_tree.mapToGlobal(point))
@@ -327,6 +855,8 @@ class SyncForm(QtGui.QWidget):
             hide_syncd_checkstate = self._hide_syncd.isChecked()
             hid = 0
             for asset_name, asset_dict in self._asset_items.items():
+                #logger.info(">>>>>>  asset_name: {}", asset_name)
+                #logger.info(">>>>>>  asset_dict: {}", asset_dict)
                 asset_status = asset_dict.get('status')
                 if asset_status == "Syncd":
 
@@ -465,7 +995,7 @@ class SyncForm(QtGui.QWidget):
             self.log_error(e)
 
     
-    def make_top_level_tree_item(self, asset_name=None, status=None, details=None, icon=None, root_path=None):
+    def make_top_level_tree_item(self, asset_name=None, status=None, version=None, details=None, icon=None, root_path=None):
         """
         Creates QTreeWidgetItem to display asset information
         """
@@ -477,6 +1007,7 @@ class SyncForm(QtGui.QWidget):
 
         tree_item.setText(self.ASSET_NAME, asset_name)
         tree_item.setText(self.STATUS, status)
+        tree_item.setText(self.VERSION, version)
         tree_item.setText(self.DETAIL, details)
         tree_item.setIcon(self.STATUS, self.make_icon(icon))
 
@@ -500,7 +1031,9 @@ class SyncForm(QtGui.QWidget):
             status = sync_item_info.get('status')
             step = sync_item_info.get('step')
             file_type = sync_item_info.get('type')
+            version = sync_item_info.get('version')
 
+            # self.fw.log_info(version)
             tree_item = self._asset_items[asset_name].get("tree_widget")
 
             child_tree_item = QtGui.QTreeWidgetItem(tree_item)
@@ -527,9 +1060,12 @@ class SyncForm(QtGui.QWidget):
 
             child_tree_item.setText(self.ASSET_NAME, asset_file_name) #If it is not clientFile specifically it seems like the name is within that info at least the correct wording is probably in clientFile
             child_tree_item.setText(self.STATUS, status.title())
+            child_tree_item.setText(self.VERSION, str(version))
             child_tree_item.setText(self.DETAIL, asset_file_path) #after testing it works as intended but we need to link it to the actual names the correct wording is probably in depotFile
             child_tree_item.setIcon(self.STATUS, self.make_icon("load"))
             child_tree_item.setData(2, QtCore.Qt.UserRole, asset_file_path)
+
+
 
             child_tree_item.status = status
             
@@ -551,6 +1087,7 @@ class SyncForm(QtGui.QWidget):
 
             tree_widget = self.make_top_level_tree_item(asset_name=info_processed_dict.get("asset_name"),
                                         status= info_processed_dict.get("status"),
+                                        version=info_processed_dict.get("version"),
                                         details= info_processed_dict.get("details"),
                                         icon = info_processed_dict.get("icon"),
                                         root_path = info_processed_dict.get("root_path")                         
@@ -618,7 +1155,6 @@ class SyncForm(QtGui.QWidget):
             # self.fw.log_info(len(self.entities_to_sync))
             # iterate all parent assets
             for entity_to_sync in self.entities_to_sync:
-
                 asset_info_gather_worker = AssetInfoGatherWorker(app=self.app,
                                                                 entity=entity_to_sync,
                                                                 framework=self.fw)
@@ -636,7 +1172,7 @@ class SyncForm(QtGui.QWidget):
                 #     if self.child_asset_ids:
                 #         if entity_to_sync.get('id') in self.child_asset_ids:
                 #             asset_info_gather_worker.child = True
-                asset_info_gather_worker.run()
+                self._sg_data = asset_info_gather_worker.run()
                 # self.threadpool.start(asset_info_gather_worker)
         except Exception as e:
             self.log_error(e)
@@ -757,3 +1293,13 @@ class SyncForm(QtGui.QWidget):
                 sync_worker.run()
         except Exception as e:
             self.log_error(e)
+
+
+    def log(self, msg, error=0):
+        if logger:
+            if error:
+                logger.warn(msg)
+            else:
+                logger.info(msg)
+
+        print(msg)

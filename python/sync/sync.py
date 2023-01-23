@@ -81,6 +81,7 @@ class SyncHandler(object):
 
             result, _ = self._fw.engine.show_modal("Perforce Sync ", self._fw, SyncForm, 
                                                    self.app, self.entities_to_sync, self.specific_files)
+                                                   #self.app, self.entities_to_sync, self.specific_files, self.app)
 
             if result == QtGui.QDialog.Accepted:
                 pass
