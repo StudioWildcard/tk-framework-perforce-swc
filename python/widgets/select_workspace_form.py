@@ -57,10 +57,12 @@ class SelectWorkspaceForm(QtGui.QWidget):
         self.__ui.workspace_list.installEventFilter(self)
 
         self._fw = sgtk.platform.current_bundle()
-        self._root_path = os.path.abspath(
-            os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
 
         self._workspace_details = workspace_details
+
+        self._root_path = None
+        self.get_root_path()
+
         self._current_workspace = current_workspace
 
         self._mapping_status = self._get_drive_status()
@@ -85,7 +87,16 @@ class SelectWorkspaceForm(QtGui.QWidget):
         
         item = self.__ui.workspace_list.item(selected_row, 0)
         return item.text()
-    
+
+    def get_root_path(self):
+        if self._workspace_details and len(self._workspace_details) > 0:
+            details = self._workspace_details[0]
+            self._root_path = details.get('Root', None)
+            if not self._root_path:
+                self._root_path = os.path.abspath(
+                    os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
+
+
     def eventFilter(self, q_object, event):
         """
         Custom event filter to filter enter-key press events from the workspace
@@ -110,7 +121,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
             self._root_path,
             QtGui.QFileDialog.ShowDirsOnly
             )
-        self.__ui.folderInput.setText(selectedDir)
+        # self.__ui.folderInput.setText(selectedDir)
         drive = self._root_path[0:2]
         drive = drive.lower()
 
@@ -120,6 +131,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
                 self.log_status("Selected folder {} is empty".format(selectedDir))
                 if self._root_path and len(self._root_path) >= 2:
                     self._create_drive_mapping(drive, selectedDir)
+                    self.__ui.folderInput.setText(selectedDir)
                 else:
                     self.log_status("Error with project root path: {}".format(self._root_path))
             else:
@@ -127,6 +139,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
                 result = self._warning_dialog()
                 if result:
                     self._create_drive_mapping(drive, selectedDir)
+                    self.__ui.folderInput.setText(selectedDir)
         else:
             self.log_status("Selected folder {} does not exist, please select another folder".format(selectedDir))
         return selectedDir
@@ -309,6 +322,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
             for line in lines:
                 if drive not in line.strip("\n"):
                     f.write(line)
+        f.close()
 
     def _create_startup_file(self, drive, folder):
         """
@@ -318,14 +332,14 @@ class SelectWorkspaceForm(QtGui.QWidget):
         file_path = "{}/{}".format(self._startup_folder,file_name)
 
         drive = drive.lower()
-        f = open(file_path, "w")
+        f = open(file_path, "a")
         f.write("subst {} {}\n".format(drive, folder))
         f.close()
 
         #os.chmod(file_path, 509)
         os.chmod(f, 0o777)
         if os.path.exists(file_path):
-            self.log_status("\nCreated {} file at startup folder {}".format(file_name, self._startup_folder))
+            self.log_status("\nUpdated {} file at startup folder {}".format(file_name, self._startup_folder))
             return file_path
         return None
 
