@@ -222,6 +222,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
             
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
+        self.app.processEvents()
 
     def _get_drive_status(self):
         # check the project drive
@@ -337,7 +338,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
         f.close()
 
         #os.chmod(file_path, 509)
-        os.chmod(f, 0o777)
+        os.chmod(file_path, 0o777)
         if os.path.exists(file_path):
             self.log_status("\nUpdated {} file at startup folder {}".format(file_name, self._startup_folder))
             return file_path
