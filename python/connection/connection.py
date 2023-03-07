@@ -742,7 +742,7 @@ class ConnectionHandler(object):
         project_name = self._fw.sgtk.pipeline_configuration._project_name
         root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
         template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
-
+        self.log('root_path is {}'.format(root_path))
         self.log('template_name is {}'.format(template_name))
         hostname = socket.gethostname()
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname

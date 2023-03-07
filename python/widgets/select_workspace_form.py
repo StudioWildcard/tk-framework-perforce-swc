@@ -90,12 +90,9 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
     def get_root_path(self):
         if self._workspace_details and len(self._workspace_details) > 0:
-            details = self._workspace_details[0]
-            self._root_path = details.get('Root', None)
-            if not self._root_path:
-                self._root_path = os.path.abspath(
+            self._root_path = os.path.abspath(
                     os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
-
+            logger.debug("root path: {}".format(self._root_path))
 
     def eventFilter(self, q_object, event):
         """
@@ -213,7 +210,8 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
             self.__ui.workspace_list.setItem(wsi, 0, QtGui.QTableWidgetItem(ws_name))
             self.__ui.workspace_list.setItem(wsi, 1, QtGui.QTableWidgetItem(ws.get("Description", "").strip()))
-            self.__ui.workspace_list.setItem(wsi, 2, QtGui.QTableWidgetItem(ws.get("Root", "").strip()))
+            #self.__ui.workspace_list.setItem(wsi, 2, QtGui.QTableWidgetItem(ws.get("Root", "").strip()))
+            self.__ui.workspace_list.setItem(wsi, 2, QtGui.QTableWidgetItem(self._root_path))
 
         if selected_index >= 0:
             self.__ui.workspace_list.selectRow(selected_index)
