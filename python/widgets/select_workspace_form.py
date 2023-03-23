@@ -215,8 +215,10 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
         if selected_index >= 0:
             self.__ui.workspace_list.selectRow(selected_index)
+            self.log_status("\nWorkspace {} is selected, click OK to confirm".format(self._current_workspace))
         else:
             self.__ui.workspace_list.clearSelection()
+
             
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
@@ -231,7 +233,8 @@ class SelectWorkspaceForm(QtGui.QWidget):
             self.log_status(msg)
             self.__ui.folderInput.setText(path)
             self.__ui.folderBtn.setText("Change mapping folder")
-            self._set_workspace()
+            # self._set_workspace()
+            self._display_workspace()
             return True
         else:
             msg = '\nSelect a folder to create project drive mapping '
@@ -293,7 +296,8 @@ class SelectWorkspaceForm(QtGui.QWidget):
             self.__ui.folderBtn.setText("Change mapping folder")
             self.log_status("Displaying workspace {} ...".format(self._current_workspace))
             self._create_startup_file(drive, folder)
-            self._set_workspace()
+            # self._set_workspace()
+            self._display_workspace()
 
     def _set_workspace(self):
         self._display_workspace()
