@@ -219,7 +219,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
         else:
             self.__ui.workspace_list.clearSelection()
 
-            
+
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
         self.app.processEvents()

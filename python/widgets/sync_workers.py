@@ -8,7 +8,6 @@ import time
 
 from ..sync.resolver import TemplateResolver
 
-logger = sgtk.platform.get_logger(__name__)
 
 class SyncSignaller(QtCore.QObject):
     """
@@ -135,7 +134,6 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
             if self.entity.get('type') in ["PublishFiles"]:
                 sg_ret = self.app.shotgun.find_one("Asset", [["id", "is", self.entity.get('entity').get('id')]], ['code'])
                 name = sg_ret.get('code')
-
             return name
         except Exception as e:
             self.log_error(e)
@@ -254,67 +252,15 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                         sg_filter = ["id", "in", self.entity.get('id')]
                     published_files = self.app.shotgun.find('PublishedFile', [sg_filter], find_fields )
                     published_file_by_depot_file = {i.get('sg_p4_depo_path'):i for i in published_files}
-
-                    #self.fw.log_info(published_file_by_depot_file)
-                    self.sg_data = {}
-
-                    for published_file in published_files:
-                        id = published_file.get('id')
-                        #self.fw.log_info(id)
-                        #filters = [ ['id', 'is', id],
-                        #    ['project', 'is', {'type': 'Project', 'id': 155}]
-                        #     ]
-                        filters = [['id', 'is', id]
-                                   ]
-                        #fields = ['code', 'created_by', 'id', 'name', 'path', 'version_number']
-
-                        fields = ['code', 'created_at', 'created_by', 'created_by.HumanUser.image', 'description',
-                                      'entity', 'id', 'image', 'name', 'path', 'project', 'published_file_type',
-                                      'sg_status_list','task', 'task.Task.content', 'task.Task.due_date',
-                                      'task.Task.sg_status_list', 'task_uniqueness', 'type', 'version',
-                                      'version.Version.sg_status_list', 'version_number']
-
-                        order = [{'field_name': 'version_number', 'direction': 'desc'}]
-
-                        publish_dict = self.app.shotgun.find_one('PublishedFile', filters, fields, order)
-
-                        #for k, v in publish_dict.items():
-                        #    self.fw.log_info(k)
-                        #    self.fw.log_info(v)
-                        key = publish_dict.get('name')
-                        if key not in self.sg_data:
-                            self.sg_data[key] = publish_dict
-                        else:
-                            if 'version_number' in self.sg_data[key]:
-                                if publish_dict.get('version_number', 0) > self.sg_data[key]['version_number']:
-                                    self.sg_data[key] = publish_dict
-                    #for k, v in self.sg_data.items():
-                    #    self.fw.log_info(k)
-                    #    self.fw.log_info(v)
-
-
+                    # self.fw.log_info(published_file_by_depot_file)
                     for item in self._items_to_sync:
 
                         published_file = published_file_by_depot_file.get(item.get('depotFile'))
-
                         step = None
-
-                        version_number = 0
-                        item_path = item.get('depotFile')
-                        # self.log('>>>>> item_path: {}'.format(item_path))
-                        try:
-                            key = os.path.basename(item_path)
-                        except:
-                            key = item_path.split("/")
-                            key = key[-1]
-                        self.log('key: {}'.format(key))
-                        if key in self.sg_data:
-                            if 'version_number' in self.sg_data[key]:
-                                version_number = self.sg_data[key]['version_number']
-                        self.log('version_number: {}'.format(version_number))
 
                         file_type = None
                         if published_file:
+                            #self.fw.log_info(published_file_by_depot_file)
 
                             step = published_file.get("task.Task.step.Step.code")
                             file_type = published_file.get("published_file_type.PublishedFileType.code")
@@ -341,12 +287,9 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
                             "step" : step,
                             "type" : file_type,
                             "ext" : ext.lower(),
-                            "status" : status,
-                            "version": str(version_number)
+                            "status" : status
                             }
                         )
-
-
             else:
                 progress_status_string = " (Encountered error. See details)"
             self.fw.log_info(progress_status_string)
@@ -356,12 +299,3 @@ class AssetInfoGatherWorker(QtCore.QRunnable):
             self.log_error(e)
 
         self.progress.emit("Gathering info for {} {}".format(self.asset_name, progress_status_string))
-        return self.sg_data
-
-    def log(self, msg, error=0):
-        if logger:
-            if error:
-                logger.warn(msg)
-            else:
-                logger.info(msg)
-        print(msg)
