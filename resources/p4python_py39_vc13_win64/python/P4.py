@@ -605,7 +605,6 @@ class P4(P4API.P4Adapter):
             self.logger.info("p4 " + " ".join(flatArgs))
         
         try:
-            self.logger.info("Running command: {}".format(*flatArgs))
             result = P4API.P4Adapter.run(self, *flatArgs)
         except P4Exception as e:
             if self.logger:
