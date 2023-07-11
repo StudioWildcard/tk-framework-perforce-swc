@@ -89,12 +89,20 @@ class P4Reconciler:
         }
 
     @property
-    def opened_files(self):
+    def opened_files(self, dry_run=False):
         if os.path.isdir(self.root_path):
             path = os.path.join(self.root_path, "...")
         else:
             path = os.path.join(os.path.dirname(self.root_path), "...")
-        opened = self.p4.run('opened', path) 
+        try:
+            if dry_run:
+                # no -n flag, so this will actually run the command
+                opened = self.p4.run('opened', "-n", path)
+            else:
+                # no -n flag, so this will actually run the command
+                opened = self.p4.run('opened', path)
+        except P4Exception as e:
+            raise TankError("Unable to get opened files: %s" % e)
         reformatted = []
         for open_item in opened:
             if open_item.get('client') == self.p4.client:

@@ -50,14 +50,19 @@ def create_change(p4, description):
     return new_change
 
 
-def add_to_change(p4, change, file_paths):
+def add_to_change(p4, change, file_paths, dry_run=False):
     """
     Add the specified files to the specified change
     """
     try:
         # use reopen command which works with local file paths.
         # fetch/modify/save_change only works with depot paths!
-        p4.run_reopen("-c", str(change), file_paths)
+        if dry_run:
+            # # -n flag is to do a dry run
+            p4.run_reopen("-c", str(change), "-n", file_paths)
+        else:
+            # no -n flag, so this will actually run the command
+            p4.run_reopen("-c", str(change), file_paths)
     except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
@@ -67,7 +72,12 @@ def find_change_containing(p4, path):
     Find the current change that the specified path is in.
     """
     try:
-        p4_res = p4.run_fstat(path)
+        if dry_run:
+            # -n flag is to do a dry run
+            p4_res = p4.run_fstat("-n", path)
+        else:
+            # no -n flag, so this will actually run the command
+            p4_res = p4.run_fstat(path)
     except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
@@ -81,7 +91,12 @@ def submit_change(p4, change):
     """
     try:
         change_spec = p4.fetch_change("-o", str(change))
-        submit = p4.run_submit(change_spec)
+        if dry_run:
+            # -n flag is to do a dry run
+            submit = p4.run_submit("-n", change_spec)
+        else:
+            # no -n flag, so this will actually run the command
+            submit = p4.run_submit(change_spec)
         """
         run_submit returns a list of dicts, something like this:
         [{'change': '90', 'locked': '2'},
@@ -109,7 +124,12 @@ def get_change_details(p4, changes):
     :returns dict:     A dictionary mapping each change to the details found
     """
     try:
-        p4_res = p4.run_describe(changes)
+        if dry_run:
+            # -n flag is to do a dry run
+            p4_res = p4.run_describe("-n", changes)
+        else:
+            # no -n flag, so this will actually run the command
+            p4_res = p4.run_describe(changes)
     except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
