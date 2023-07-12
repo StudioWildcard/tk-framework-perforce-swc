@@ -67,7 +67,7 @@ def add_to_change(p4, change, file_paths, dry_run=False):
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
-def find_change_containing(p4, path):
+def find_change_containing(p4, path, dry_run=False):
     """
     Find the current change that the specified path is in.
     """
@@ -85,7 +85,7 @@ def find_change_containing(p4, path):
     return change
 
 
-def submit_change(p4, change):
+def submit_change(p4, change, dry_run=False):
     """
     Submit the specified change
     """
@@ -115,7 +115,7 @@ def submit_change(p4, change):
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
-def get_change_details(p4, changes):
+def get_change_details(p4, changes, dry_run=False):
     """
     Get the changes details for one or more changes
 
