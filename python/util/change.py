@@ -67,17 +67,12 @@ def add_to_change(p4, change, file_paths, dry_run=False):
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
-def find_change_containing(p4, path, dry_run=False):
+def find_change_containing(p4, path):
     """
     Find the current change that the specified path is in.
     """
     try:
-        if dry_run:
-            # -n flag is to do a dry run
-            p4_res = p4.run_fstat("-n", path)
-        else:
-            # no -n flag, so this will actually run the command
-            p4_res = p4.run_fstat(path)
+        p4_res = p4.run_fstat(path)
     except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
@@ -115,7 +110,7 @@ def submit_change(p4, change, dry_run=False):
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 
 
-def get_change_details(p4, changes, dry_run=False):
+def get_change_details(p4, changes):
     """
     Get the changes details for one or more changes
 
@@ -124,12 +119,7 @@ def get_change_details(p4, changes, dry_run=False):
     :returns dict:     A dictionary mapping each change to the details found
     """
     try:
-        if dry_run:
-            # -n flag is to do a dry run
-            p4_res = p4.run_describe("-n", changes)
-        else:
-            # no -n flag, so this will actually run the command
-            p4_res = p4.run_describe(changes)
+        p4_res = p4.run_describe(changes)
     except P4Exception as e:
         raise TankError("Perforce: %s" % (p4.errors[0] if p4.errors else e))
 

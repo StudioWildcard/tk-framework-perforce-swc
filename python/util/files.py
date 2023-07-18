@@ -156,8 +156,12 @@ def sync_published_file(p4, published_file_entity, latest=True, dry_run=False ):
         if dry_run:
             # -n flag is to do a dry run
             sync_args.append("-n")
+            sync_args.append("-s")
 
-        p4.run_sync(sync_args, sync_path)
+        results = p4.run_sync(sync_args, sync_path)
+        if results:
+            if "can't update modified file" in results[0]:
+                raise TankError(results[0] if results else f"Failed to sync file {sync_path} to latest revision")
     except P4Exception as e:
         raise TankError("Perforce: Failed to sync file %s - %s" % (sync_path, p4.errors[0] if p4.errors else e))
 
@@ -189,12 +193,7 @@ def open_file_for_edit(p4, path, add_if_new=True, test_only=False, dry_run=False
     file_stat = []
     try:
         # as long as exception_level = 1, this will return [] if the file is not in the depo
-        if dry_run:
-            # -n flag is to do a dry run
-            file_stat = p4.run_fstat("-n", path)
-        else:
-            # no -n flag, so this will actually run the command
-            file_stat = p4.run_fstat(path)
+        file_stat = p4.run_fstat(path)
     except Exception as e:
         invalid_char_error_str = "Invalid changelist/client/label/date"
         if invalid_char_error_str in str(e):
@@ -260,7 +259,10 @@ Illegal character in filename: {}""".format(os.path.basename(path), illegal_char
                 try:
                     if dry_run:
                         # -n flag is to do a dry run
-                        p4.run_fstat("-n", *sync_args)
+                        results = p4.run_sync("-n", "-s", *sync_args)
+                        if results:
+                            if "can't update modified file" in results[0]:
+                                raise TankError(results[0] if results else f"Failed to sync file {path} to latest revision")
                     else:
                         # no -n flag, so this will actually run the command
                         p4.run_sync(sync_args)
@@ -281,12 +283,7 @@ Illegal character in filename: {}""".format(os.path.basename(path), illegal_char
         if test_only:
             # ensure file exists under the client root:
             try:
-                if dry_run:
-                    # -n flag is to do a dry run
-                    p4.run_where("-n", path)
-                else:
-                    # no -n flag, so this will actually run the command
-                    p4.run_where(path)
+                p4.run_where(path)
             except P4Exception as e:
                 raise TankError("Unable to add file '%s' to depot - %s"
                                 % (path, p4.errors[0] if p4.errors else e))
@@ -352,7 +349,7 @@ def __get_client_view(p4):
                         % (p4.user, p4.client, p4.errors[0] if p4.errors else e))
 
 
-def __run_fstat_and_aggregate(p4, file_paths, fields, flags, type, ignore_deleted=True, dry_run=False):
+def __run_fstat_and_aggregate(p4, file_paths, fields, flags, type, ignore_deleted=True):
     """
     Return file details for the specified list of paths by calling
     fstat on them.
@@ -404,10 +401,6 @@ def __run_fstat_and_aggregate(p4, file_paths, fields, flags, type, ignore_delete
     # query files using fstat
     p4_res = []
     try:
-        if dry_run:
-            # -n flag is to do a dry run
-            flags.append("-n")
-
         p4_res = p4.run_fstat(flags, file_paths)
     except P4Exception as e:
         # under normal circumstances, this shouldn't happen so just raise a TankError.
