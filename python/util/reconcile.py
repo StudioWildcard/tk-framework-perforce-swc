@@ -28,9 +28,10 @@ logger = sgtk.LogManager.get_logger(__name__)
 class P4Reconciler:
     _root_path = None
     _p4 = None
+    _changelist = None
     actions = {}
 
-    def __init__(self, p4, root_path):
+    def __init__(self, p4, root_path=None, change=None):
         """
         Object to handle scanning directories for statuses, then keeping it cached
         to individually reconcile the discovered paths as needed.
@@ -40,6 +41,7 @@ class P4Reconciler:
         """
         self.p4 = p4
         self.root_path = root_path
+        self.changelist = change
 
 
     def __getattr__(self, item):
@@ -74,10 +76,18 @@ class P4Reconciler:
     @property
     def root_path(self):
         return self._root_path
+    
+    @property
+    def changelist(self):
+        return self._changelist    
 
     @root_path.setter
     def root_path(self, value):
         self._root_path = value
+
+    @changelist.setter
+    def changelist(self, value):
+        self._changelist = value        
 
     def reset_collection(self):
         self.actions = {
@@ -90,17 +100,20 @@ class P4Reconciler:
 
     @property
     def opened_files(self, dry_run=False):
-        if os.path.isdir(self.root_path):
-            path = os.path.join(self.root_path, "...")
-        else:
-            path = os.path.join(os.path.dirname(self.root_path), "...")
+        if self.changelist:
+            path = ['-c', self.changelist]  
+        else:          
+            if os.path.isdir(self.root_path):
+                path = [os.path.join(self.root_path, "...")]
+            else:
+                path = [os.path.join(os.path.dirname(self.root_path), "...")]
         try:
             if dry_run:
                 # no -n flag, so this will actually run the command
-                opened = self.p4.run('opened', "-n", path)
+                opened = self.p4.run('opened', "-n", *path)
             else:
                 # no -n flag, so this will actually run the command
-                opened = self.p4.run('opened', path)
+                opened = self.p4.run('opened', *path)
         except P4Exception as e:
             raise TankError("Unable to get opened files: %s" % e)
         reformatted = []
@@ -114,7 +127,7 @@ class P4Reconciler:
         return reformatted
 
 
-    def scan(self, path=None):
+    def scan(self, path=None, change=None):
         """
         Scan the chosen directory recursively, reconcile status of
         local file state against Perforce server. 
@@ -131,24 +144,25 @@ class P4Reconciler:
         # get opened files
         self.actions['open'].extend(self.opened_files)
  
-        # run for reconcile-specific calls
-        if os.path.isdir(self.root_path):
-            response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "..."))
-        else:
-            response = self.p4.run('reconcile', "-m", "-n", self.root_path)
+        if change != None:
+            # run for reconcile-specific calls
+            if os.path.isdir(self.root_path):
+                response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "..."))
+            else:
+                response = self.p4.run('reconcile', "-m", "-n", self.root_path)
 
-        if response:
-            for item in response:
-                if type(item)==dict:
-                    action = item.get('action') 
-                    if action:
-                        self.actions.get(action.split("/")[0]).append(item)
+            if response:
+                for item in response:
+                    if type(item)==dict:
+                        action = item.get('action') 
+                        if action:
+                            self.actions.get(action.split("/")[0]).append(item)
 
 
-def reconcile_files(path):
+def reconcile_files(path=None, change=None):
     fw = sgtk.platform.current_bundle()
     p4 = fw.connection.connect()
 
-    reconciler = P4Reconciler(p4, path)
+    reconciler = P4Reconciler(p4, path, change)
     reconciler.scan()
     return reconciler
