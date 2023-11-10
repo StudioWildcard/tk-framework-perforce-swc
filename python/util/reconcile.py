@@ -127,7 +127,7 @@ class P4Reconciler:
         return reformatted
 
 
-    def scan(self, path=None, change=None):
+    def scan(self, path=None):
         """
         Scan the chosen directory recursively, reconcile status of
         local file state against Perforce server. 
@@ -144,7 +144,7 @@ class P4Reconciler:
         # get opened files
         self.actions['open'].extend(self.opened_files)
  
-        if change != None:
+        if self.root_path:
             # run for reconcile-specific calls
             if os.path.isdir(self.root_path):
                 response = self.p4.run('reconcile', "-m", "-n", os.path.join(self.root_path, "..."))
