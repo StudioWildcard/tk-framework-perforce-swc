@@ -29,14 +29,14 @@ configuration:
         type: hook
         parameters: [sg_user]
         default_value: get_perforce_user
-        description: "Specify a hook that will return the Perforce user name for a specified Shotgun
+        description: "Specify a hook that will return the Perforce user name for a specified Flow Production Tracking
                       user name"
 
     hook_get_shotgun_user:
         type: hook
         parameters: [p4_user]
         default_value: get_shotgun_user
-        description: "Specify a hook that will return the Shotgun user name for a specified Perforce
+        description: "Specify a hook that will return the Flow Production Tracking user name for a specified Perforce
                       user name"
 
     hook_store_publish_data:
@@ -66,7 +66,7 @@ configuration:
 # This framework is shared so that there is only a single instance
 shared: True
 
-# the Shotgun fields that this engine needs in order to operate correctly
+# the Flow Production Tracking fields that this engine needs in order to operate correctly
 requires_shotgun_fields:
 
 # More verbose description of this item

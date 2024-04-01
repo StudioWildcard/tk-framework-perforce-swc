@@ -454,6 +454,15 @@ class ConnectionHandler(object):
         finally:
             _g_connection_lock.release()
 
+    def is_connected(self):
+        """
+        Returns p4
+        """
+        p4 = None
+        if self._p4 and self._p4.connected():
+            p4 = self._p4
+        return p4
+
     def __has_ui(self):
         """
         Check if the engine has a ui
