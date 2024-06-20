@@ -55,7 +55,7 @@ class SyncHandler(object):
 
         :returns: None
         """
-
+        # store the entities to sync
         self.entities_to_sync = entities_to_sync
         self.app = app
         self.specific_files = specific_files
