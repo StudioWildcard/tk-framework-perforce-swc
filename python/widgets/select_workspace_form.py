@@ -9,7 +9,8 @@
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 import sgtk
-from sgtk.platform.qt import QtCore, QtGui, QtWidgets
+from sgtk.platform.qt import QtCore, QtGui
+from tank.platform.qt5 import QtWidgets
 import subprocess
 import os
 import collections
@@ -142,18 +143,18 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
     def _warning_dialog(self):
         display_msg = "Warning: The selected folder is not empty. This could create problems syncing files from Perforce."
-        confirmation_box = QtWidgets.QMessageBox()
+        confirmation_box = QtGui.QMessageBox()
         confirmation_box.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         confirmation_box.setText(display_msg)
         confirmation_box.setWindowTitle("Warning!")
         confirmation_box.setStandardButtons(
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Proceed Anyway")
-        no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
+            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        yes_btn = confirmation_box.button(QtGui.QMessageBox.Yes).setText("Proceed Anyway")
+        no_btn = confirmation_box.button(QtGui.QMessageBox.No).setText("Cancel")
         result = confirmation_box.exec_()
-        if result == QtWidgets.QMessageBox.Yes:
+        if result == QtGui.QMessageBox.Yes:
             return True
-        elif result == QtWidgets.QMessageBox.No:
+        elif result == QtGui.QMessageBox.No:
             return False
 
     def _on_cancel(self):
