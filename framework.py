@@ -1,11 +1,11 @@
 # Copyright (c) 2013 Shotgun Software Inc.
-# 
+#
 # CONFIDENTIAL AND PROPRIETARY
-# 
-# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit 
+#
+# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit
 # Source Code License included in this distribution package. See LICENSE.
-# By accessing, using, copying or modifying this work you indicate your 
-# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
+# By accessing, using, copying or modifying this work you indicate your
+# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
@@ -17,45 +17,47 @@ import platform
 import sys
 import os
 
+
 class PerforceFramework(sgtk.platform.Framework):
 
     ##########################################################################################
     # init and destroy
-            
+
     def init_framework(self):
         """
         Construction
         """
         self.log_debug("%s: Initializing..." % self)
-        
+
         # initialize p4python:
         self.__init_p4python()
-        
+
         # add modules to this instance so the interface is nicer for users
         # allows fw.util type syntax.
         self.connection = self.import_module("connection")
         self.util = self.import_module("util")
         self.widgets = self.import_module("widgets")
-        
+        self.sync = self.import_module("sync")
+
         self.__p4_to_sg_user_map = {}
         self.__sg_to_p4_user_map = {}
-    
+
     def destroy_framework(self):
         """
         Destruction
         """
         self.log_debug("%s: Destroying..." % self)
-    
+
     # Username handling (via hooks)
     #
     def get_perforce_user(self, sg_user):
         """
         Return the Perforce user associated with the specified Shotgun user
         """
-        if sg_user["id"] in self.__sg_to_p4_user_map: 
+        if sg_user["id"] in self.__sg_to_p4_user_map:
             return self.__sg_to_p4_user_map[sg_user["id"]]
-        
-        p4_user = self.execute_hook("hook_get_perforce_user", sg_user = sg_user)
+
+        p4_user = self.execute_hook("hook_get_perforce_user", sg_user=sg_user)
         self.__sg_to_p4_user_map[sg_user["id"]] = p4_user
         return p4_user
 
@@ -63,35 +65,35 @@ class PerforceFramework(sgtk.platform.Framework):
         """
         Return the Shotgun user associated with the specified Perforce user
         """
-        if p4_user in self.__p4_to_sg_user_map: 
+        if p4_user in self.__p4_to_sg_user_map:
             return self.__p4_to_sg_user_map[p4_user]
-        
-        sg_user = self.execute_hook("hook_get_shotgun_user", p4_user = p4_user)
+
+        sg_user = self.execute_hook("hook_get_shotgun_user", p4_user=p4_user)
         self.__p4_to_sg_user_map[p4_user] = sg_user
         return sg_user
-        
+
     # store/load publish data
     #
     def store_publish_data(self, local_path, publish_data, p4=None):
         """
         Store the publish data for the specified path somewhere using a hook
         """
-        self.execute_hook("hook_store_publish_data", 
-                          local_path = local_path,
-                          publish_data = publish_data,
-                          p4 = p4)
-    
+        self.execute_hook("hook_store_publish_data",
+                          local_path=local_path,
+                          publish_data=publish_data,
+                          p4=p4)
+
     def load_publish_data(self, depot_path, user, workspace, revision, p4=None):
         """
         Load the publish data for the specified path, user & workspace
         from the location it was stored using a hook
         """
-        return self.execute_hook("hook_load_publish_data", 
-                                 depot_path = depot_path,
-                                 user = user, 
-                                 workspace = workspace,
-                                 revision = revision,
-                                 p4 = p4)
+        return self.execute_hook("hook_load_publish_data",
+                                 depot_path=depot_path,
+                                 user=user,
+                                 workspace=workspace,
+                                 revision=revision,
+                                 p4=p4)
 
     # store/load review data
     #
@@ -100,28 +102,28 @@ class PerforceFramework(sgtk.platform.Framework):
         Store review 'version' data for the specified publish path
         somewhere using a hook
         """
-        self.execute_hook("hook_store_review_data", 
-                          local_path = local_path,
-                          review_data = review_data,
-                          p4 = p4)
+        self.execute_hook("hook_store_review_data",
+                          local_path=local_path,
+                          review_data=review_data,
+                          p4=p4)
 
     def load_publish_review_data(self, depot_path, user, workspace, revision, p4=None):
         """
         Load the review version data for the specified publish paths, user & workspace
         from the location it was stored using a hook
         """
-        return self.execute_hook("hook_load_review_data", 
-                                 depot_path = depot_path,
-                                 user = user, 
-                                 workspace = workspace,
-                                 revision = revision,
-                                 p4 = p4)
+        return self.execute_hook("hook_load_review_data",
+                                 depot_path=depot_path,
+                                 user=user,
+                                 workspace=workspace,
+                                 revision=revision,
+                                 p4=p4)
 
     # private methods
-    #    
+    #
     def __init_p4python(self):
         """
-        Make sure that p4python is available and if it's not then add it to the path if 
+        Make sure that p4python is available and if it's not then add it to the path if
         we have a version we can use.
         """
         try:
@@ -136,13 +138,13 @@ class PerforceFramework(sgtk.platform.Framework):
 
         # build the directory path for our distributed P4Python:
         #
-        
+
         # Python version:
         py_version_str = "%d%d" % (sys.version_info[0], sys.version_info[1])
 
         # platform/os string
-        os_str = {"darwin":"mac", "win32":"win64" if sys.maxsize > 2**32 else "win32", "linux2":"linux"}[sys.platform]
-        
+        os_str = {"darwin": "mac", "win32": "win64" if sys.maxsize > 2**32 else "win32", "linux2": "linux"}[sys.platform]
+
         # compiler string - currently windows specific
         compiler_strings = [""]
         preferred_compiler_str = ""
@@ -157,10 +159,10 @@ class PerforceFramework(sgtk.platform.Framework):
             # The main example of this atm is 3ds Max 2014 with Blur Python running Python 2.7...  3ds Max & Blur
             # are both compiled with VS 2010 but the stock release of Python 2.7 is built with VS 2008.
             compiler = platform.python_compiler()
-            
+
             # default vc version for python 2.6 & 2.7 is 9 (VS2008):
             vc_version = 9
-            
+
             # split the string - it will be something like this:
             # "MSC v.1500 64 bit (AMD64)"
             parts = compiler.split()
@@ -168,11 +170,11 @@ class PerforceFramework(sgtk.platform.Framework):
                 # have a compatible string!
                 try:
                     msc_version = int(parts[1][2:])
-                    
-                    # convert this to a vc version - follow convention of 
+
+                    # convert this to a vc version - follow convention of
                     # msc_version being 6 ahead of vc version!
-                    vc_version = msc_version/100 - 6
-                    
+                    vc_version = msc_version / 100 - 6
+
                 except ValueError:
                     pass
 
@@ -193,7 +195,7 @@ class PerforceFramework(sgtk.platform.Framework):
                 preferred_p4_path = p4_path
 
             # append it to the path:
-            if p4_path not in sys.path: 
+            if p4_path not in sys.path:
                 sys.path.append(p4_path)
             try:
                 # attempt to import P4
@@ -212,9 +214,7 @@ class PerforceFramework(sgtk.platform.Framework):
                                "Please contact https://www.autodesk.com/support/contact-support "
                                "for assistance!" 
                                % (sys.version_info[0], sys.version_info[1], preferred_compiler_str))
-            else:            
+            else:
                 self.log_error("Failed to load P4Python!")
         else:
             self.log_debug("P4Python successfully loaded!")
-            
-  

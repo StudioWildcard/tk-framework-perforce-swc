@@ -1,11 +1,11 @@
 # Copyright (c) 2013 Shotgun Software Inc.
-# 
+#
 # CONFIDENTIAL AND PROPRIETARY
-# 
-# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit 
+#
+# This work is provided "AS IS" and subject to the Shotgun Pipeline Toolkit
 # Source Code License included in this distribution package. See LICENSE.
-# By accessing, using, copying or modifying this work you indicate your 
-# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
+# By accessing, using, copying or modifying this work you indicate your
+# agreement to the Shotgun Pipeline Toolkit Source Code License. All rights
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
 """
@@ -20,43 +20,44 @@ import os
 import sys
 import tempfile
 import binascii
- 
+
+
 class LoadPublishData(sgtk.Hook):
-    
+
     PUBLISH_ATTRIB_NAME = "shotgun_metadata"
-    
+
     def execute(self, depot_path, user, workspace, revision, p4, **kwargs):
         """
         Load the specified publish data so that was previously stored by
         the corresponding save_publish_data hook
-        
+
         :param depot_path:  String
                             Depot path to the file being published
-                        
+
         :param user:        Dictionary
                             Shotgun HumanUser entity dictionary
-                        
+
         :param workspace:   String
                             The Perforce workspace/client that path is being published in
-                     
+
         :param revision:    Int
                             Revision of the file
-                        
+
         :param p4:          P4 instance
                             The Perforce connection to use if needed.
-                        
+
         :returns:           Dictionary
                             A dictionary containing the following entries:
                             {
-                                "data":Dictionary         - this is the entity creation data for a Shotgun 
-                                                            PublishedFile entity that was stored by the 
+                                "data":Dictionary         - this is the entity creation data for a Shotgun
+                                                            PublishedFile entity that was stored by the
                                                             corresponding store hook
-                            
+
                                 "temp_files":List         - this is a list of temporary files that can be deleted
                                                             once they are finished with by the calling bundle
                             }
         """
-        # the default implementation looks for the publish data in a p4 attribute 
+        # the default implementation looks for the publish data in a p4 attribute
         # that lives with the file:
         #
         #    shotgun_metadata - contains a yaml version of all metadata
@@ -64,20 +65,20 @@ class LoadPublishData(sgtk.Hook):
         # If a thumbnail was specified in the publish_data then this will have been
         # stored as a project attachment and will need to be downloaded.
         temp_files = []
-              
+
         p4_fw = self.parent
         from P4 import P4Exception
 
         # make sure we have a Perforce connection:
         p4 = p4 if p4 else p4_fw.connection.connect()
 
-        # get the attribute data from Perforce:        
+        # get the attribute data from Perforce:
         p4_attr_name = "attr-%s" % LoadPublishData.PUBLISH_ATTRIB_NAME
         depot_revision_path = "%s#%d" % (depot_path, revision)
-        file_details = p4_fw.util.get_depot_file_details(p4, depot_revision_path, fields = [p4_attr_name])
-        
+        file_details = p4_fw.util.get_depot_file_details(p4, depot_revision_path, fields=[p4_attr_name])
+
         # find data and load yaml data:
-        sg_metadata_str = file_details[depot_revision_path].get(p4_attr_name)        
+        sg_metadata_str = file_details[depot_revision_path].get(p4_attr_name)
         sg_metadata = {}
         if sg_metadata_str:
             sg_metadata = yaml.load(sg_metadata_str)
@@ -89,10 +90,10 @@ class LoadPublishData(sgtk.Hook):
         if ctx_str:
             ctx = sgtk.context.deserialize(ctx_str)
             sg_metadata["context"] = ctx
-            
+
         # download thumbnail from attachment in Shotgun:
         thumbnail_path_data = sg_metadata.get("thumbnail_path")
-        
+
         if thumbnail_path_data and isinstance(thumbnail_path_data, tuple):
             thumbnail_path, attachment_id = thumbnail_path_data
 
@@ -101,15 +102,15 @@ class LoadPublishData(sgtk.Hook):
             if thumbnail_path:
                 _, thumbnail_suffix = os.path.splitext(thumbnail_path)
 
-            # and download thumbnail:                
+            # and download thumbnail:
             thumbnail_path = self.__download_file_from_sg(attachment_id, thumbnail_suffix)
             if thumbnail_path:
                 sg_metadata["thumbnail_path"] = thumbnail_path
                 temp_files.append(thumbnail_path)
             else:
-                del sg_metadata["thumbnail_path"]                
+                del sg_metadata["thumbnail_path"]
 
-        return {"data":sg_metadata, "temp_files":temp_files} 
+        return {"data": sg_metadata, "temp_files": temp_files}
 
     def __download_file_from_sg(self, attachment_id, suffix):
         """
@@ -118,17 +119,17 @@ class LoadPublishData(sgtk.Hook):
         if not hasattr(self.parent, "__sg_downloaded_attachment_cache"):
             self.parent.__sg_downloaded_attachment_cache = {}
         cache = self.parent.__sg_downloaded_attachment_cache
-        
+
         file_path = cache.get(attachment_id)
         if file_path and os.path.exists(file_path):
             # we've already downloaded it so just return path:
             return file_path
-        
+
         # get a temp path to write out to:
         temp_file, temp_path = tempfile.mkstemp(suffix=suffix, prefix="shotguntmp")
         if temp_file:
             os.close(temp_file)
-        
+
         # using old API so can't write straight to file - consider updating!
         try:
             self.parent.shotgun.download_attachment(attachment_id=attachment_id, file_path=temp_path)
@@ -137,6 +138,4 @@ class LoadPublishData(sgtk.Hook):
             # code deal with no path being returned!
             return
 
-        return temp_path    
-
-
+        return temp_path
