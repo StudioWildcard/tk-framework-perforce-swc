@@ -10,7 +10,6 @@
 
 import sgtk
 from sgtk.platform.qt import QtCore, QtGui
-from tank.platform.qt5 import QtWidgets
 import subprocess
 import os
 import collections
@@ -38,8 +37,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
         """
         QtGui.QWidget.__init__(self, parent)
 
-        self.app = QtWidgets.QApplication.instance()
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
         # setup UI:
         self.__ui = Ui_SelectWorkspaceForm()
         self.__ui.setupUi(self)
@@ -222,7 +220,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
 
     def _get_drive_status(self):
         # check the project drive
@@ -410,7 +408,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
     def add_status(self, status):
         self.__ui.status_dialog.append(status)
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
 
     def log_status(self, status):
         self.add_status(status)
