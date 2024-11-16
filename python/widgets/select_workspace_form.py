@@ -10,7 +10,6 @@
 
 import sgtk
 from sgtk.platform.qt import QtCore, QtGui
-from tank.platform.qt5 import QtWidgets
 import subprocess
 import os
 import collections
@@ -38,8 +37,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
         """
         QtGui.QWidget.__init__(self, parent)
 
-        self.app = QtWidgets.QApplication.instance()
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
         # setup UI:
         self.__ui = Ui_SelectWorkspaceForm()
         self.__ui.setupUi(self)
@@ -143,18 +141,18 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
     def _warning_dialog(self):
         display_msg = "Warning: The selected folder is not empty. This could create problems syncing files from Perforce."
-        confirmation_box = QtWidgets.QMessageBox()
+        confirmation_box = QtGui.QMessageBox()
         confirmation_box.setWindowFlags(QtCore.Qt.WindowStaysOnTopHint)
         confirmation_box.setText(display_msg)
         confirmation_box.setWindowTitle("Warning!")
         confirmation_box.setStandardButtons(
-            QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No)
-        yes_btn = confirmation_box.button(QtWidgets.QMessageBox.Yes).setText("Proceed Anyway")
-        no_btn = confirmation_box.button(QtWidgets.QMessageBox.No).setText("Cancel")
+            QtGui.QMessageBox.Yes | QtGui.QMessageBox.No)
+        yes_btn = confirmation_box.button(QtGui.QMessageBox.Yes).setText("Proceed Anyway")
+        no_btn = confirmation_box.button(QtGui.QMessageBox.No).setText("Cancel")
         result = confirmation_box.exec_()
-        if result == QtWidgets.QMessageBox.Yes:
+        if result == QtGui.QMessageBox.Yes:
             return True
-        elif result == QtWidgets.QMessageBox.No:
+        elif result == QtGui.QMessageBox.No:
             return False
 
     def _on_cancel(self):
@@ -222,7 +220,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
         self.__ui.workspace_list.setSortingEnabled(True)
         self.__ui.workspace_list.resizeColumnToContents(0)
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
 
     def _get_drive_status(self):
         # check the project drive
@@ -410,7 +408,7 @@ class SelectWorkspaceForm(QtGui.QWidget):
 
     def add_status(self, status):
         self.__ui.status_dialog.append(status)
-        self.app.processEvents()
+        QtCore.QCoreApplication.processEvents()
 
     def log_status(self, status):
         self.add_status(status)
