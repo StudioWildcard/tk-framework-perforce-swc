@@ -320,7 +320,7 @@ class ConnectionHandler(object):
 
         workspace_name = self._sgtk_workspace()
 
-        self._filtered_workspaces = [ws for ws in all_workspaces if ws.get("client") == workspace_name]
+        self._filtered_workspaces = [ws for ws in all_workspaces if ws.get("client").lower() == workspace_name.lower()]
         self.log('Filtered workspaces: {}'.format(self._filtered_workspaces))
 
         # show the password entry dialog:
@@ -756,10 +756,10 @@ class ConnectionHandler(object):
         hostname = socket.gethostname()
         workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
         self.log('workspace_name is {}'.format(workspace_name))
-        workspaces = [c["client"] for c in p4.run("clients")]
+        workspaces = [c["client"].lower() for c in p4.run("clients")]
         #self.log('workspaces are ... {}'.format(workspaces))
 
-        if workspace_name in workspaces:
+        if workspace_name.lower() in workspaces:
             self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
