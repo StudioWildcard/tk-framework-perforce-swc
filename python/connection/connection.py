@@ -738,6 +738,7 @@ class ConnectionHandler(object):
             template_name =  "sgtk_Ark2Depot_master"
         elif self.p4_server.startswith("ssl"):
             template_name = "sgtk_devaDepot_master"
+        logger.debug(f"_get_template() returned {template_name}.")
         return template_name
 
     def _sgtk_workspace(self):
@@ -752,11 +753,11 @@ class ConnectionHandler(object):
         project_name = self._fw.sgtk.pipeline_configuration._project_name
         root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
         template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
-        logger.debug('root_path is {}'.format(root_path))
-        #self.log('template_name is {}'.format(template_name))
+        logger.debug(f"root_path is {root_path}")
+        logger.debug(f"template_name is {template_name}")
         hostname = socket.gethostname()
-        workspace_name = "sgtk_{}_{}_{}".format(project_name, p4.user, hostname)  # sgtk_proj_username_hostname
-        #self.log('workspace_name is {}'.format(workspace_name))
+        workspace_name = f"sgtk_{project_name}_{p4.user}_{hostname}"  # sgtk_proj_username_hostname
+        logger.debug(f"workspace_name is {workspace_name}")
         workspaces = [c["client"].lower() for c in p4.run("clients")]
         #self.log('workspaces are ... {}'.format(workspaces))
 
