@@ -758,10 +758,10 @@ class ConnectionHandler(object):
         hostname = socket.gethostname()
         workspace_name = f"sgtk_{project_name}_{p4.user}_{hostname}"  # sgtk_proj_username_hostname
         logger.debug(f"workspace_name is {workspace_name}")
-        workspaces = [c["client"].lower() for c in p4.run("clients")]
+        workspaces = [c["client"] for c in p4.run("clients")]
         #self.log('workspaces are ... {}'.format(workspaces))
 
-        if workspace_name.lower() in workspaces:
+        if workspace_name in workspaces:
             self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
