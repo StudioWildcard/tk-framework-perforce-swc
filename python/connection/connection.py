@@ -59,9 +59,6 @@ class ConnectionHandler(object):
         self._fw = fw
         self._p4 = None
         self.p4_server = self._get_p4_server()
-        self.templates = {"swc-perforce.studiowildcard.com:1666":"sgtk_Ark2Depot_master",
-                          "ssl:192.168.2.238:1666":"sgtk_devaDepot_master",
-                          "ssl:artifact.studiowildcard.com:20654":"sgtk_devaDepot_master"}
 
     @property
     def connection(self):
@@ -732,49 +729,43 @@ class ConnectionHandler(object):
         #self.log('current user is logged in')
         return True
 
-    def _get_template(self):
-        template_name = ""
-        if self.p4_server.startswith("swc"):
-            template_name =  "sgtk_Ark2Depot_master"
-        elif self.p4_server.startswith("ssl"):
-            template_name = "sgtk_devaDepot_master"
-        logger.debug(f"_get_template() returned {template_name}.")
-        return template_name
-
     def _sgtk_workspace(self):
         """
         Fetches the Sgtk-created workspace for perforce or creates one if it does not
-        exist.
+        exist. Uses the project's ``tank_name`` field to derive template and workspace names.
 
         :returns: The name of the sgtk workspace.
         """
 
         p4 = self.connection
-        project_name = self._fw.sgtk.pipeline_configuration._project_name
+
+        # Query tank_name from ShotGrid Project entity
+        project = self._fw.shotgun.find_one(
+            'Project',
+            [['id', 'is', self._fw.context.project['id']]],
+            ['tank_name']
+        )
+        tank_name = project.get('tank_name') if project else None
+        if not tank_name:
+            self._fw.log_error("Project has no tank_name set! Contact your admin.")
+            return None
+
         root_path = os.path.abspath(os.path.join(self._fw.sgtk.roots.get('primary'), os.pardir))  # one directory above project root
-        template_name = "sgtk_{}_master".format(project_name)  # sgtk_proj_master
+        template_name = "sgtk_{}_master".format(tank_name)
         logger.debug(f"root_path is {root_path}")
         logger.debug(f"template_name is {template_name}")
         hostname = socket.gethostname()
-        workspace_name = f"sgtk_{project_name}_{p4.user}_{hostname}"  # sgtk_proj_username_hostname
+        workspace_name = "sgtk_{}_{}_{}".format(tank_name, p4.user, hostname)
         logger.debug(f"workspace_name is {workspace_name}")
         workspaces = [c["client"] for c in p4.run("clients")]
-        #self.log('workspaces are ... {}'.format(workspaces))
 
         if workspace_name in workspaces:
             self._fw.log_debug("Existing workspace found: {}".format(workspace_name))
             return workspace_name
         else:
             if template_name not in workspaces:
-                if self.p4_server in self.templates:
-                    template_name = self.templates[self.p4_server]
-                    if template_name not in workspaces:
-                        template_name = self._get_template()
-                else:
-                    template_name = self._get_template()
-                if template_name not in workspaces:
-                    self._fw.log_error("Template workspace '{}' not found! Contact your admin.".format(template_name))
-                    return None
+                self._fw.log_error("Template workspace '{}' not found! Contact your admin.".format(template_name))
+                return None
 
         self._fw.log_debug("Creating new workspace: {}".format(workspace_name))
         try:
@@ -785,7 +776,7 @@ class ConnectionHandler(object):
             client._description = "Sgtk-generated workspace based on {}".format(template_name)
             # save the client workspace to p4 so we can access it
             p4.save_client(client)
-        except:
+        except Exception:
             self._fw.log_error("Error creating new workspace: '{}'! Contact your admin.".format(template_name))
             return None
 
