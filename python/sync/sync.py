@@ -26,6 +26,8 @@ from sgtk.platform.qt import QtGui
 
 from P4 import P4, P4Exception
 
+logger = sgtk.platform.get_logger(__name__)
+
 
 class SgtkP4Error(TankError):
     """
@@ -92,19 +94,69 @@ class SyncHandler(object):
 
 
     def _get_p4_server(self):
-        user = sgtk.util.get_current_user(self._fw.sgtk)        
-        sg_user = self._fw.shotgun.find_one('HumanUser', [['id', 'is', user['id']]], ["sg_region"])
-        server_field = self._fw.get_setting("server_field")
-        sg_project = self._fw.shotgun.find_one('Project', [['id', 'is', self._fw.context.project['id']]], [server_field])
-        server = sg_project.get(server_field)
-        region = sg_user.get("sg_region")
-        sg_server = self._fw.shotgun.find_one('CustomNonProjectEntity02', [['id', 'is', server['id']]], [region])
+        """
+        Get P4 server based on sg_region.
 
-        if not sg_server:
-            self._fw.log_error("No server was configured for this project! Enter the p4 server in the project field '{}'".format(server_field))
+        Lookup chain:
+          1. Current user → sg_region
+          2. Framework setting → server_field (default: sg_perforce_server)
+          3. Project[server_field] → linked CustomNonProjectEntity02
+          4. CustomNonProjectEntity02[region] → server address
+        """
+        project_id = self._fw.context.project['id'] if self._fw.context.project else None
+        logger.debug("_get_p4_server: context project id = %s, context = %s", project_id, self._fw.context)
+
+        user = sgtk.util.get_current_user(self._fw.sgtk)
+        logger.debug("_get_p4_server: sgtk user = %s", user)
+
+        sg_user = self._fw.shotgun.find_one('HumanUser', [['id', 'is', user['id']]], ["sg_region"])
+        region = sg_user.get("sg_region") if sg_user else None
+        logger.debug("_get_p4_server: sg_user = %s, region = %s", sg_user, region)
+
+        if not region:
+            self._fw.log_error("User has no sg_region set! Cannot determine P4 server.")
             return None
 
-        return str(sg_server.get(region))
+        server_field = self._fw.get_setting("server_field")
+        logger.debug("_get_p4_server: server_field setting = '%s'", server_field)
+
+        if not project_id:
+            self._fw.log_error("No project in current context — cannot determine P4 server.")
+            return None
+
+        sg_project = self._fw.shotgun.find_one('Project', [['id', 'is', project_id]], [server_field])
+        logger.debug("_get_p4_server: sg_project = %s", sg_project)
+
+        if not sg_project:
+            self._fw.log_error("Project id %s not found in ShotGrid!" % project_id)
+            return None
+
+        server = sg_project.get(server_field)
+        logger.debug("_get_p4_server: server entity ref = %s", server)
+
+        if not server or not isinstance(server, dict) or 'id' not in server:
+            self._fw.log_error("Project '%s' (id %s) has no '%s' field set! Enter the p4 server in the project field '%s'."
+                               % (sg_project.get('name', '?'), project_id, server_field, server_field))
+            return None
+
+        sg_server = self._fw.shotgun.find_one('CustomNonProjectEntity02', [['id', 'is', server['id']]], [region])
+        logger.debug("_get_p4_server: CustomNonProjectEntity02 id=%s, fetched fields=[%s], result = %s",
+                      server['id'], region, sg_server)
+
+        if not sg_server:
+            self._fw.log_error("No server entity (CustomNonProjectEntity02 id=%s) found for this project! "
+                               "Enter the p4 server in the project field '%s'." % (server['id'], server_field))
+            return None
+
+        p4_server = sg_server.get(region)
+        logger.debug("_get_p4_server: resolved P4 server = '%s' (project=%s, region=%s, server_entity=%s)",
+                      p4_server, project_id, region, server.get('name', server.get('id')))
+
+        if not p4_server:
+            self._fw.log_error("Server entity '%s' has no value for region '%s'!" % (server.get('name', server['id']), region))
+            return None
+
+        return str(p4_server)
 
 
 def sync_with_dialog(app, entities_to_sync, specific_files=False):
