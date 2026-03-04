@@ -8,4 +8,5 @@
 # agreement to the Shotgun Pipeline Toolkit Source Code License. All rights 
 # not expressly granted therein are reserved by Shotgun Software Inc.
 
-from .sync import  sync_with_dialog # connect,
+from .sync import sync_with_dialog
+from .sync_path import sync_path_with_dialog
