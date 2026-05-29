@@ -20,7 +20,6 @@ from P4 import P4Exception, Map as P4Map  # Prefix P4 for consistency
 import sgtk
 from sgtk import TankError
 from tank_vendor import six
-from tank_vendor.six.moves import urllib
 
 logger = sgtk.LogManager.get_logger(__name__)
 

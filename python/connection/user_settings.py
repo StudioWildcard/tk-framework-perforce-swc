@@ -92,7 +92,7 @@ class UserSettings(object):
         
         q_settings.beginWriteArray(self._prefix)
         
-        for ai, (project_id, details) in enumerate(settings.iteritems()):
+        for ai, (project_id, details) in enumerate(settings.items()):
             q_settings.setArrayIndex(ai)
             q_settings.setValue("project_id", project_id)
             q_settings.setValue("client", details.get("client", ""))

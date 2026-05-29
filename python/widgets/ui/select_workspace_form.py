@@ -142,7 +142,7 @@ class Ui_SelectWorkspaceForm(object):
     # setupUi
 
     def retranslateUi(self, SelectWorkspaceForm):
-        SelectWorkspaceForm.setWindowTitle(QApplication.translate("SelectWorkspaceForm", "Form", None, QApplication.UnicodeUTF8))
-        self.details_label.setText(QApplication.translate("SelectWorkspaceForm", "Perforce Workspace for user \'\' on server \'\'", None, QApplication.UnicodeUTF8))
-        self.cancel_btn.setText(QApplication.translate("SelectWorkspaceForm", "Cancel", None, QApplication.UnicodeUTF8))
-        self.ok_btn.setText(QApplication.translate("SelectWorkspaceForm", "Ok", None, QApplication.UnicodeUTF8))
+        SelectWorkspaceForm.setWindowTitle(QApplication.translate("SelectWorkspaceForm", "Form", None))
+        self.details_label.setText(QApplication.translate("SelectWorkspaceForm", "Perforce Workspace for user \'\' on server \'\'", None))
+        self.cancel_btn.setText(QApplication.translate("SelectWorkspaceForm", "Cancel", None))
+        self.ok_btn.setText(QApplication.translate("SelectWorkspaceForm", "Ok", None))

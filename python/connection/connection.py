@@ -495,18 +495,23 @@ class ConnectionHandler(object):
         # establish a connection
         self.connect(local_framework=True)
 
-        #logged_in, show_details = self._do_login(allow_ui=True)
-        try:
-            self._fw.log_debug("Attempting to log-in user %s to server %s" % (self._p4.user, self._p4.port))
-            self._p4.run_login()
-        except P4Exception as e:
-            # keep track of error message:
-            error_msg = self._p4.errors[0] if self._p4.errors else str(e)
-            self._fw.log_debug(error_msg)
-        else:
-            # successfully logged in!
-            return (True, False)
+        # Only attempt an interactive login if we don't already hold a valid ticket.
+        # For SSO / OIDC servers (e.g. the P4 Authentication Service) run_login()
+        # re-launches the browser auth flow on every call, so honour an existing,
+        # still-valid ticket instead of re-authenticating on each connect.
+        if self._login_required_user():
+            try:
+                self._fw.log_debug("Attempting to log-in user %s to server %s" % (self._p4.user, self._p4.port))
+                self._p4.run_login()
+            except P4Exception as e:
+                # keep track of error message:
+                error_msg = self._p4.errors[0] if self._p4.errors else str(e)
+                self._fw.log_debug(error_msg)
 
+        # This is the explicit "show the Perforce connection dialog" entry point
+        # (e.g. the "Perforce Status..." command), so ALWAYS present the dialog - the
+        # user is asking to review status / browse & change their workspace. Login above
+        # is ticket-gated, so showing the dialog no longer re-triggers the SSO browser.
         try:
             from ..widgets import OpenConnectionForm
 
